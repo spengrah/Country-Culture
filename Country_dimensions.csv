@@ -1,19 +1,20 @@
-Country,PDI,IDV,MAS,UAI,LTO,IND
-United States,40,91,62,46,26,68
-Mexico,81,30,69,82,24,97
-Canada,39,80,52,48,36,68
-Costa Rica,35,15,21,86,,
-Peru,64,16,42,87,25,46
-Brazil,39,38,49,76,44,59
-England,,,,,,
-Scotland,,,,,,
-United Kingdom,35,89,66,35,51,69
-France,68,71,43,86,63,48
-Tanzania,70,25,40,50,34,38
-South Africa,49,65,63,49,34,63
-Swaziland,,,,,,
-Australia,36,90,61,51,21,71
-New Zealand,22,79,58,49,33,75
-Thailand,64,20,34,64,32,45
-Japan,54,46,95,92,88,42
-Singapore,74,20,48,8,72,46
+Country,PDI,IDV,MAS,UAI,LTO,IND,GDPPC,USdiff_sad,USdiff_sad_norm
+United States,40,91,62,46,26,68,57300,0,0
+Mexico,81,30,69,82,24,97,18900,176,43
+Canada,39,80,52,48,36,68,46200,34,8
+Costa Rica,35,15,21,86,,,16100,,
+Peru,64,16,42,87,25,46,13000,183,45
+Brazil,39,38,49,76,44,59,15200,124,30
+England,,,,,,,,,
+Scotland,,,,,,,,,
+United Kingdom,35,89,66,35,51,69,42500,48,12
+France,68,71,43,86,63,48,42400,164,40
+Tanzania,70,25,40,50,34,38,3100,160,39
+South Africa,49,65,63,49,34,63,13200,52,13
+Swaziland,,,,,,,9800,,
+Australia,36,90,61,51,21,71,48800,19,5
+New Zealand,22,79,58,49,33,75,37100,51,12
+Thailand,64,20,34,64,32,45,16800,170,42
+Japan,54,46,95,92,88,42,38900,226,55
+Singapore,74,20,48,8,72,46,87100,225,55
+Most different,100,0,0,100,100,0,,409,
