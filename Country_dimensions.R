@@ -67,7 +67,7 @@ g <- ggplot(plotdata, aes(USdiff_sad_norm, GDPPC)) +
                            labels = c("$0", "$20k", "$40k", "$60k"),
                            limits = c(0, 60000)) +
         expand_limits(x = 0, y = 0) +
-        labs(title = "Economy and Culture", 
+        labs(title = "Country Wealth and Culture", 
              subtitle = "Among countries I've visited, plus Japan",
              caption = "Based on data from the CIA World Factbook and Geert Hofstede") +
         geom_hline(yintercept = 28000, linetype = "dashed", color = "dark grey",
