@@ -68,7 +68,7 @@ g <- ggplot(plotdata, aes(USdiff_sad_norm, GDPPC)) +
                            limits = c(0, 60000)) +
         expand_limits(x = 0, y = 0) +
         labs(title = "Economy and Culture", 
-             subtitle = "Among countries I've visited",
+             subtitle = "Among countries I've visited, plus Japan",
              caption = "Based on data from the CIA World Factbook and Geert Hofstede") +
         geom_hline(yintercept = 28000, linetype = "dashed", color = "dark grey",
                    size = .4) +
@@ -79,5 +79,5 @@ g <- ggplot(plotdata, aes(USdiff_sad_norm, GDPPC)) +
               plot.caption = element_text(face = "italic", size = 10),
               axis.title = element_text(face = "bold"),
               legend.title = element_text(face = "bold"),
-              legend.justification = "top",
-              legend.background = element_rect(fill = "light grey"))
+              legend.justification = "bottom",
+              legend.background = element_rect(fill = "#ededed"))
