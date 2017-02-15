@@ -1,5 +1,5 @@
 require(dplyr); require(ggplot2); require(ggrepel); require(ggthemes)
-require(cluster); require(plotly)
+require(cluster)
 
 # read data into R
 data_dir <- "~/Documents/Blogging/Country-Culture"
