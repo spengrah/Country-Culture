@@ -50,6 +50,7 @@ shinyServer(function(input, output) {
         plotdata <- reactive({
                 mutate(dataCDI(), my_countries = 
                                    as.factor(my_countries(dataCDI(), visited(), interested(), home())))
+                        
         })
 
 ## code from here on down runs each time inputs are updated--------
@@ -61,14 +62,15 @@ shinyServer(function(input, output) {
                 ggplot(plotdata(), aes(x = CDI_norm, y = GDPPC, alpha = my_countries,
                                      color = my_countries)) +
                 theme_classic() +
-                geom_point(size = 3) +
+                geom_point(size = 5) +
                 scale_color_manual(values = c("visited" = "green", 
                                               "interested" = "red",
                                               "other" = "black",
                                               "home" = "blue"),
                                    name = "My Countries") +
+                        # figure out how to layer the colors over the grey
                 scale_alpha_manual(values = c("visited" = 1, "interested" = 1,
-                                              "other" = .4, "home" = 1),
+                                              "other" = .3, "home" = 1),
                                    name = "My Countries") +
                 scale_x_continuous(name = paste("Cultural Difference Index (vs. ", 
                                                 home(), ")", sep = ""),
@@ -79,13 +81,11 @@ shinyServer(function(input, output) {
                                    labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
                                    limits = c(0, 105000)) +
                 expand_limits(x = 0, y = 0) +
-                theme(text = element_text(family = "sans", size = 12, color = "#3C3C3C"),
+                theme(text = element_text(family = "sans", size = 16, color = "#3C3C3C"),
                       plot.title = element_text(size = 16, face = "bold"),
                       plot.caption = element_text(face = "italic", size = 10),
-                      axis.title = element_text(face = "bold"),
-                      legend.title = element_text(face = "bold"),
-                      legend.justification = "bottom",
-                      legend.background = element_rect(fill = "#ededed"))
+                      axis.title = element_text(face = "bold")) +
+                guides(color = "none", alpha = "none")
         })
         
 
