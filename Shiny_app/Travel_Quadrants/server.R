@@ -3,7 +3,7 @@
 #
 
 
-library(shiny); require(dplyr); require(ggplot2); require(scales)
+library(shiny); require(dplyr); require(ggplot2); require(scales); require(reshape2)
 
 ## this code only runs once, when app is published ---------------
 rawData <- readRDS("data/country_data.rds")
@@ -35,6 +35,8 @@ my_countries <- function(X, visited, interested, home) {
 		   	   ifelse(temp$country %in% home, temp$type <- "home",
 		   	   	   temp$type <- "other")))
 }
+
+cult_measures <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
 
 ## code inside this unnamed function runs each session ------------
 shinyServer(function(input, output) {
@@ -88,35 +90,74 @@ shinyServer(function(input, output) {
 			guides(color = "none", alpha = "none")
 	})
 	
-	output$hover_info <- renderPrint({
+	# render the hover tooltip
+	output$hover_info <- renderUI({
 		hover <- input$plot_hover
 		point <- nearPoints(plotdata(), hover, xvar = "CDI_norm",
 							yvar = "GDPPC", maxpoints = 1, addDist = T)
+		if (nrow(point) == 0) return(NULL)
+			# the following code borrowed from Pawel via, https://gitlab.com/snippets/16220
+			# calculate point position INSIDE the image as percent of total dimensions
+			# from left (horizontal) and from top (vertical)
+			left_pct <- (hover$x - hover$domain$left) / (hover$domain$right - hover$domain$left)
+			top_pct <- (hover$domain$top - hover$y) / (hover$domain$top - hover$domain$bottom)
+			
+			# calculate distance from left and bottom side of the picture in pixels
+			left_px <- hover$range$left + left_pct * (hover$range$right - hover$range$left)
+			top_px <- hover$range$top + top_pct * (hover$range$bottom - hover$range$top)
+			
+			# create style property for tooltip
+			# background color is set so tooltip is a bit transparent
+			# z-index is set so we are sure are tooltip will be on top
+			style <- paste0("position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
+							"left:", left_px + 2, "px; top:", 
+							top_px + 2, "px; padding: 5px;")
+			
+			wellPanel(
+				style = style,
+				HTML(paste("<b>",as.character(point$Country),"</b>"), "<br/>",
+					 "<b>GDP: </b>", dollar_format()(point$GDPPC), "<br/>",
+					 "<b>CDI: </b>", round(point$CDI_norm,0), "<br/>"
+					 )
+			)
+	})
+	
+	# render the cultural dimensions barplot
+	# HOW BIG SHOULD THIS CHART BE?
+	output$click_plot <- renderPlot({
+		click <- input$plot_click
+		point <- nearPoints(plotdata(), click, xvar = "CDI_norm",
+							yvar = "GDPPC", maxpoints = 1)
+		
+		point_plus_home <- rbind(point, filter(plotdata(), Country == home()))
+		bardata <- melt(point_plus_home, id.vars = "Country", 
+						measure.vars = cult_measures, value.name = "score",
+						variable.name = "dim")
 
-		# the following code borrowed from Pawel via, https://gitlab.com/snippets/16220
-		# calculate point position INSIDE the image as percent of total dimensions
-		# from left (horizontal) and from top (vertical)
-		left_pct <- (hover$x - hover$domain$left) / (hover$domain$right - hover$domain$left)
-		top_pct <- (hover$domain$top - hover$y) / (hover$domain$top - hover$domain$bottom)
+		if (req(!is.null(click))) {
+			ggplot(bardata, aes(x = dim, y = score, fill = Country)) +
+				theme_minimal() +
+				geom_bar(stat = "identity", position = position_dodge()) +
+				scale_fill_manual(values = c("grey", "blue")) +
+				ylim(0, 100) +
+				xlab("Hoftede's Cultural Dimensions") +
+				ylab(NULL)
+			# revise labels
+				
+		}
+	})
+	
+	# render the wikipedia URL
+	output$click_url <- renderUI ({
+		click <- input$plot_click
+		point <- nearPoints(plotdata(), click, xvar = "CDI_norm",
+							yvar = "GDPPC", maxpoints = 1)
 		
-		# calculate distance from left and bottom side of the picture in pixels
-		left_px <- hover$range$left + left_pct * (hover$range$right - hover$range$left)
-		top_px <- hover$range$top + top_pct * (hover$range$bottom - hover$range$top)
+		if (req(!is.null(click))) {
+			country <- gsub(" ", "_", point$Country)
+			HTML(paste0("Read more about ", point$Country, " on <a href= 'https://en.wikipedia.org/wiki/", country, "'> Wikipedia </a>"))
+		}
 		
-		# create style property for tooltip
-		# background color is set so tooltip is a bit transparent
-		# z-index is set so we are sure are tooltip will be on top
-		style <- paste0("position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
-						"left:", left_px + 2, "px; top:", 
-						top_px + 2, "px; padding: 5px;")
-		
-		wellPanel(
-			style = style,
-			HTML(paste("<b>",as.character(point$Country),"</b>"), "<br/>",
-				 "<b>GDP: </b>", dollar_format()(point$GDPPC), "<br/>",
-				 "<b>CDI: </b>", round(point$CDI_norm,0), "<br/>"
-				 )
-		)
 	})
 	
 	
