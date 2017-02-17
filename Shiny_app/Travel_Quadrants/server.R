@@ -42,17 +42,41 @@ edist <- function(X, home_country) {
 	df
 }
 
+# function that, if given a dataset with a cultural diff variable and input
+# country vectors, returns a vector of recommended travel destinations determined
+# by the largest Euclidean distance from home and all visited countries.
+recommend <- function(X, visited, home) {
 
+	# 1. subset the dataset to include only CD_norm and GDPPC_norm
+	rdata <- select(X, CD_norm, GDPPC_norm)
 
-# function that, given a dataset and input country vectors, returns a vector 
-# denoting country types
-my_countries <- function(X, visited, interested, home) {
-	temp <- data.frame("country" = X$Country, 
+	# 2. generate a distance matrix for all countries
+	rdist <- as.data.frame(as.matrix(dist(rdata)))
+	
+	current <- c(home, visited)
+
+	# 3. subset the distance matrix for only the rows corresponding to visited
+	# 	 and home countries and columns corresponding to all other countries
+	r_df <- rdist %>% filter(row.names(rdist) %in% current)
+	r_df2 <- r_df[, -which(names(r_df) %in% current)]
+
+	# 4. summarize (mean, min, median, other?) by column.
+	r_means <- summarize_each(r_df2, funs(min)) # POTENTIALLY add UI control????
+					 
+	# 5. The 3 columns with the largest resulting values are the recommended countries
+	recs <- names(head(sort(unlist(r_means), decreasing = T),3))
+}
+
+# function that, given a dataset and input + recommended country vectors, 
+# returns a vector denoting country types
+my_countries <- function(X, visited, interested, home, recommended) {
+	temp <- data.frame("country" = X$Country,
 					   "type" = vector(mode = "character", length = nrow(X)))
-	ifelse(temp$country %in% visited, temp$type <- "visited",
-		   ifelse(temp$country %in% interested, temp$type <- "interested",
-		   	   ifelse(temp$country %in% home, temp$type <- "home",
-		   	   	   temp$type <- "other")))
+	ifelse(temp$country %in% home, temp$type <- "home",
+		   ifelse(temp$country %in% recommended, temp$type <- "recommended",
+		   	   ifelse(temp$country %in% visited, temp$type <- "visited",
+		   	   	   ifelse(temp$country %in% interested, temp$type <- "interested",
+		   	   	   	   temp$type <- "other"))))
 }
 
 cult_measures <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
@@ -63,11 +87,20 @@ shinyServer(function(input, output) {
 	home <- reactive({input$home})
 	visited <- reactive({input$visited})
 	interested <- reactive({input$interested})
+
 	
 	# interactive selection of cultural difference method
 	CDmethod <- reactive({
 		if (input$method == "Cultural Difference Index") {CDI}
 		else edist
+	})
+	
+	recommended <- reactive({
+		recommend(dataCD(), visited(), home())
+	})
+	
+	colors <- reactive ({
+		my_countries(dataCD(), visited(), interested(), home(), recommended())
 	})
 	
 	# interactive calculation of CD and production of new dataset
@@ -76,7 +109,7 @@ shinyServer(function(input, output) {
 	# interactive addition of country type variable to dataset
 	plotdata <- reactive({
 		mutate(dataCD(), my_countries = 
-			   	as.factor(my_countries(dataCD(), visited(), interested(), home())))
+			   	as.factor(colors()))
 	})
 	
 	## code from here on down runs each time inputs are updated--------
@@ -104,6 +137,7 @@ shinyServer(function(input, output) {
 		paste0("Cultural Difference vs. ", home(), " (", method_label(), ")")
 	})
 	
+	
 	output$plot <- renderPlot({
 		ggplot(plotdata(), aes(x = CD_norm, y = GDPPC, alpha = my_countries,
 							   color = my_countries)) +
@@ -112,10 +146,12 @@ shinyServer(function(input, output) {
 			scale_color_manual(values = c("visited" = "green", 
 										  "interested" = "red",
 										  "other" = "black",
-										  "home" = "blue")) +
+										  "home" = "blue",
+										  "recommended" = "yellow")) +
 			# figure out how to layer the colors over the grey
 			scale_alpha_manual(values = c("visited" = 1, "interested" = 1,
-										  "other" = .3, "home" = 1),
+										  "other" = .3, "home" = 1,
+										  "recommended" = 1),
 							   name = "My Countries") +
 			scale_x_continuous(x_label(),
 							   breaks = c(0, 25, 50, 75),
