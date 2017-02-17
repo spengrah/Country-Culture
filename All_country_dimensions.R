@@ -217,7 +217,7 @@ interactive <- ggplot(plotdata, aes(x = CDI_norm, y = GDPPC, alpha = my_countrie
 ## sandbox for country recommendation engine -----------
 # step 1: define the euclidean distance between all 
 
-cddata <- elect(dataCDI, IDV, IND, LTO, MAS, PDI, UAI)
+cddata <- select(dataCDI, IDV, IND, LTO, MAS, PDI, UAI)
 	
 distEuclid <- as.matrix(dist(cddata))
 home_distEuclid <- distEuclid[,"United States"]
