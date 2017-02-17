@@ -40,7 +40,15 @@ shinyUI(fluidPage(
 			h5("Select your countries of", span("interest", style = "color:red")),
 			selectInput("interested", label = NULL, 
 						choices = homeList, 
-						multiple = T, selectize = T)
+						multiple = T, selectize = T),
+			
+			# 4. dropdown list to select cultural distance method
+			br(),
+			h5("Select a cultural difference algorithm*"),
+			selectInput("method", label = NULL, 
+						choices = list("Euclidean Distance", "Cultural Difference Index"),
+						selected = "Euclidean Distance",
+						multiple = F, selectize = F)
 		),
 		
 		# Main panel with the scatterplot and the hover

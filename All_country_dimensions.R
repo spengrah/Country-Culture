@@ -119,6 +119,11 @@ visited <- c("Mexico", "Canada", "Peru", "Brazil",
 interested <- c("Japan", "Singapore")
 CDI_comp<- CDI(data, "United States")$Comparison_country
 
+v_countries <- filter(plotdata, my_countries == "visited")
+i_countries <- filter(plotdata, my_countries == "interested")
+o_countries <- filter(plotdata, my_countries == "other")
+labeled_countries <- filter(plotdata, my_countries != "other")
+
 
 my_countries <- function(visited, interested, CDI_comp) {
         temp <- data.frame("country" = dataCDI$Country, 
@@ -130,18 +135,16 @@ my_countries <- function(visited, interested, CDI_comp) {
 }
 
 plotdata <- mutate(dataCDI, my_countries = 
-                           as.factor(my_countries(visited, interested, CDI_comp)))
+                           as.factor(my_countries(visited, interested, CDI_comp)),
+				   dist_norm = home_distEuclid_norm)
+
+plotdata2 <- mutate(dataCDI, my_countries = 
+				   	as.factor(my_countries(visited, interested, CDI_comp)))
 
 # plot the economy and cultural index data
 
-
-v_countries <- filter(plotdata, my_countries == "visited")
-i_countries <- filter(plotdata, my_countries == "interested")
-o_countries <- filter(plotdata, my_countries == "other")
-labeled_countries <- filter(plotdata, my_countries != "other")
-
 #static plot
-static <- ggplot(plotdata, aes(x = CDI_norm, y = GDPPC, alpha = my_countries)) +
+static <- ggplot(plotdata, aes(x = dist_norm, y = GDPPC, alpha = my_countries)) +
         theme_classic() +
         geom_point(size = 2, aes(color = my_countries)) +
         geom_text_repel(data = labeled_countries, alpha = 1, size = 3,
@@ -210,3 +213,16 @@ interactive <- ggplot(plotdata, aes(x = CDI_norm, y = GDPPC, alpha = my_countrie
               legend.title = element_text(face = "bold"),
               legend.justification = "bottom",
               legend.background = element_rect(fill = "#ededed"))
+
+## sandbox for country recommendation engine -----------
+# step 1: define the euclidean distance between all 
+
+cddata <- select(dataCDI, IDV, IND, LTO, MAS, PDI, UAI)
+	
+distEuclid <- as.matrix(dist(cddata))
+home_distEuclid <- distEuclid[,"United States"]
+home <- cddata[row.names(cddata) == "United States",]
+anti_home <- ifelse(home < 50, 100, 0)
+anti_matrix <- matrix(c(home, anti_home), nrow = 2, ncol = 6, byrow = T)
+anti_dist <- dist(anti_matrix)[1]
+home_distEuclid_norm <- 100*home_distEuclid/anti_dist
