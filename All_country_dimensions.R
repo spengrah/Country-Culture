@@ -1,5 +1,5 @@
 require(dplyr); require(ggplot2); require(ggrepel); require(ggthemes)
-require(cluster)
+require(cluster); require(fmsb)
 
 # read data into R
 data_dir <- "~/Documents/Blogging/Country-Culture"
@@ -226,3 +226,16 @@ anti_home <- ifelse(home < 50, 100, 0)
 anti_matrix <- matrix(c(home, anti_home), nrow = 2, ncol = 6, byrow = T)
 anti_dist <- dist(anti_matrix)[1]
 home_distEuclid_norm <- 100*home_distEuclid/anti_dist
+
+## sandbox for radar chart production
+testdata <- rbind(rep(100, 6), rep(0, 6), cult_data[1:2,])
+colors_border <- c(rgb(0, 97, 255, .9*255, maxColorValue = 255), 
+				   rgb(168, 168, 168, .9*255, maxColorValue = 255))
+colors_in <- c(rgb(0, 97, 255, .4*255, maxColorValue = 255), 
+			   rgb(168, 168, 168, .4*255, maxColorValue = 255))
+radarchart(testdata, axistype = 1, pty = 16, pcol = 
+		   colors_border, plwd = 2, plty = 1, pfcol = colors_in,
+		   cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,100,5), cglwd=0.8,
+		   vlcex=0.8)
+legend(x=0.7, y=1, legend = rownames(cult_data[1:2,]), bty = "n", pch=20 , 
+	   col=colors_in , text.col = "grey", cex=1.2, pt.cex=3)

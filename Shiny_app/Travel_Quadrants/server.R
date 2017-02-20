@@ -3,7 +3,8 @@
 #
 
 
-library(shiny); require(dplyr); require(ggplot2); require(scales); require(reshape2)
+library(shiny); require(dplyr); require(ggplot2); require(scales); 
+require(reshape2); require(fmsb)
 
 ## this code only runs once, when app is published ---------------
 rawData <- readRDS("data/country_data.rds")
@@ -42,13 +43,14 @@ edist <- function(X, home_country) {
 	df
 }
 
-# function that, if given a dataset with a cultural diff variable and input
+# function that, given a dataset with a cultural diff variable and input
 # country vectors, returns a vector of recommended travel destinations determined
 # by the largest Euclidean distance from home and all visited countries.
 recommend <- function(X, visited, home) {
 
 	# 1. subset the dataset to include only CD_norm and GDPPC_norm
-	rdata <- select(X, CD_norm, GDPPC_norm)
+	# 
+	rdata <- select(X, CD_norm, GDPPC_norm) # putting GDP on equal footing
 
 	# 2. generate a distance matrix for all countries
 	rdist <- as.data.frame(as.matrix(dist(rdata)))
@@ -69,24 +71,28 @@ recommend <- function(X, visited, home) {
 
 # function that, given a dataset and input + recommended country vectors, 
 # returns a vector denoting country types
-my_countries <- function(X, visited, interested, home, recommended) {
+my_countries <- function(X, visited, home, recommended) {
 	temp <- data.frame("country" = X$Country,
 					   "type" = vector(mode = "character", length = nrow(X)))
 	ifelse(temp$country %in% home, temp$type <- "home",
 		   ifelse(temp$country %in% recommended, temp$type <- "recommended",
 		   	   ifelse(temp$country %in% visited, temp$type <- "visited",
-		   	   	   ifelse(temp$country %in% interested, temp$type <- "interested",
-		   	   	   	   temp$type <- "other"))))
+		   	   	   temp$type <- "other")))
 }
 
 cult_measures <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
+
+# set up styles for dimensions radar chart
+colors_border <- c(alpha("blue", .9),
+				   alpha("#ffba38", .9))
+colors_in <- c(alpha("blue", .4),
+			   alpha("#ffba38", .4))
 
 ## code inside this unnamed function runs each session ------------
 shinyServer(function(input, output) {
 	# process selected countries
 	home <- reactive({input$home})
 	visited <- reactive({input$visited})
-	interested <- reactive({input$interested})
 
 	
 	# interactive selection of cultural difference method
@@ -99,8 +105,8 @@ shinyServer(function(input, output) {
 		recommend(dataCD(), visited(), home())
 	})
 	
-	colors <- reactive ({
-		my_countries(dataCD(), visited(), interested(), home(), recommended())
+	point_styles <- reactive ({
+		my_countries(dataCD(), visited(), home(), recommended())
 	})
 	
 	# interactive calculation of CD and production of new dataset
@@ -108,8 +114,7 @@ shinyServer(function(input, output) {
 	
 	# interactive addition of country type variable to dataset
 	plotdata <- reactive({
-		mutate(dataCD(), my_countries = 
-			   	as.factor(colors()))
+		mutate(dataCD(), my_countries = as.factor(point_styles()))
 	})
 	
 	## code from here on down runs each time inputs are updated--------
@@ -138,21 +143,28 @@ shinyServer(function(input, output) {
 	})
 	
 	
+	point_labels <- reactive({
+			a <- as.character(plotdata()$Country)
+			replace(a, !(a %in% recommended()), "")
+	})
+	
 	output$plot <- renderPlot({
-		ggplot(plotdata(), aes(x = CD_norm, y = GDPPC, alpha = my_countries,
-							   color = my_countries)) +
+		g <- ggplot(plotdata(), aes(x = CD_norm, y = GDPPC, alpha = my_countries,
+							   color = my_countries, size = my_countries)) +
 			theme_classic() +
-			geom_point(size = 5) +
+			geom_point() +
 			scale_color_manual(values = c("visited" = "green", 
-										  "interested" = "red",
 										  "other" = "black",
 										  "home" = "blue",
-										  "recommended" = "yellow")) +
+										  "recommended" = "red")) +
 			# figure out how to layer the colors over the grey
-			scale_alpha_manual(values = c("visited" = 1, "interested" = 1,
+			scale_alpha_manual(values = c("visited" = 1,
 										  "other" = .3, "home" = 1,
-										  "recommended" = 1),
-							   name = "My Countries") +
+										  "recommended" = 1)) +
+			scale_size_manual(values = c("visited" = 5, 
+										 "other" = 5,
+										 "home" = 5,
+										 "recommended" = 6)) +
 			scale_x_continuous(x_label(),
 							   breaks = c(0, 25, 50, 75),
 							   labels = c(home(), "25", "50", "75"),
@@ -161,12 +173,19 @@ shinyServer(function(input, output) {
 							   breaks = c(0, 25000, 50000, 75000, 100000),
 							   labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
 							   limits = c(0, 105000)) +
+			
 			# expand_limits(x = 0, y = 0) +
 			theme(text = element_text(family = "sans", size = 16, color = "#3C3C3C"),
 				  plot.title = element_text(size = 16, face = "bold"),
 				  plot.caption = element_text(face = "italic", size = 10),
 				  axis.title = element_text(face = "bold")) +
-			guides(color = "none", alpha = "none")
+			guides(color = "none", alpha = "none", size = "none")
+		g
+		
+		if (req(!is.null(point_labels))) {
+			g + geom_text_repel(label = point_labels(), size = 4.5, color = "#727272",
+								segment.color = NA, point.padding = unit(4, "pt"), nudge_y = .15)
+		}
 	})
 	
 	# render the hover tooltip
@@ -201,26 +220,34 @@ shinyServer(function(input, output) {
 			)
 	})
 	
-	# render the cultural dimensions barplot
+	# render the cultural dimensions radar chart
 	# HOW BIG SHOULD THIS CHART BE?
 	output$click_plot <- renderPlot({
 		click <- input$plot_click
 		point <- nearPoints(plotdata(), click, xvar = "CD_norm",
 							yvar = "GDPPC", maxpoints = 1)
+		point_home <- rbind(filter(plotdata(), Country == home()), point)
 		
-		point_plus_home <- rbind(point, filter(plotdata(), Country == home()))
-		bardata <- melt(point_plus_home, id.vars = "Country", 
-						measure.vars = cult_measures, value.name = "score",
-						variable.name = "dim")
+		radar_data <- rbind(rep(100, 6), rep(0, 6), 
+							select(point_home, IDV, IND, LTO, MAS, PDI, UAI))
+		
+		c_names <- c(home(), as.character(point$Country))
+
+		# bardata <- melt(point_plus_home, id.vars = "Country", 
+		# 				measure.vars = cult_measures, value.name = "score",
+		# 				variable.name = "dim")
 
 		if (req(!is.null(click))) {
-			ggplot(bardata, aes(x = dim, y = score, fill = Country)) +
-				theme_minimal() +
-				geom_bar(stat = "identity", position = position_dodge()) +
-				scale_fill_manual(values = c("grey", "blue")) +
-				ylim(0, 100) +
-				xlab("Hoftede's Cultural Dimensions") +
-				ylab(NULL)
+			
+			radarchart(radar_data, axistype = 1, pty = 16, 
+					   pcol = colors_border, plwd = 2, plty = 1, pfcol = colors_in,
+					   cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,100,25), 
+					   cglwd=0.8, vlcex=0.8)
+			
+			legend(x=0.7, y=1.2, legend = c_names, bty = "n", pch=20 , 
+				   col=colors_border , text.col = "black", cex=1.2, pt.cex=3)
+
+			
 			# revise labels
 				
 		}

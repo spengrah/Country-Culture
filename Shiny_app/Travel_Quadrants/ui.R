@@ -13,8 +13,11 @@ shinyUI(fluidPage(
 	titlePanel("Where Should I Travel Next?"),
 	h5("Maximize the cultural and economic diversity of your travel destinations"),
 	br(),
-	p("Instructions: select your home country, the countries you've already traveled to, 
-          and the countries you're interested in traveling to"),
+	
+	# Instructions
+	p("Select your home country and the countries you've already visited
+	  to see your", span("travel recommendations.", style = "color:red")),
+	p("Click on any point to see how that country compares culturally to your home country."),
 	br(),
 	
 	sidebarLayout(
@@ -29,20 +32,14 @@ shinyUI(fluidPage(
 						choices = homeList,
 						selected = "United States",
 						selectize = T),
-			# 2. multiple dropdown list to select countries visited (to make dynamic)
+			# 2. multiple dropdown list to select countries visited
 			br(),
 			h5("Select the countries you've", span("visited", style = "color:green")),
 			selectInput("visited", label = NULL, 
 						choices = homeList, 
 						multiple = T, selectize = T),
-			# 3. multiple drowpdown list to select countries interested (to make dynamic)
-			br(),
-			h5("Select your countries of", span("interest", style = "color:red")),
-			selectInput("interested", label = NULL, 
-						choices = homeList, 
-						multiple = T, selectize = T),
 			
-			# 4. dropdown list to select cultural distance method
+			# 3. single dropdown list to select cultural distance method
 			br(),
 			h5("Select a cultural difference algorithm*"),
 			selectInput("method", label = NULL, 
