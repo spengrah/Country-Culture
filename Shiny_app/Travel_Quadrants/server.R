@@ -153,7 +153,7 @@ shinyServer(function(input, output) {
 							   color = my_countries, size = my_countries)) +
 			theme_classic() +
 			geom_point() +
-			scale_color_manual(values = c("visited" = "green", 
+			scale_color_manual(values = c("visited" = "#25a31a", 
 										  "other" = "black",
 										  "home" = "blue",
 										  "recommended" = "red")) +
@@ -260,8 +260,14 @@ shinyServer(function(input, output) {
 							yvar = "GDPPC", maxpoints = 1)
 		
 		if (req(!is.null(click))) {
+			if (length(point$Country) == 0) {
+				HTML(" ")
+			}
+			else {
 			country <- gsub(" ", "_", point$Country)
-			HTML(paste0("Read more about ", point$Country, " on <a href= 'https://en.wikipedia.org/wiki/", country, "'> Wikipedia </a>"))
+			HTML(paste0("Read more about ", point$Country, " on <a href= 'https://en.wikipedia.org/wiki/", 
+						country, "'> Wikipedia </a>"))
+			}
 		}
 		
 	})

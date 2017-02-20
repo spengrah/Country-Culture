@@ -34,7 +34,7 @@ shinyUI(fluidPage(
 						selectize = T),
 			# 2. multiple dropdown list to select countries visited
 			br(),
-			h5("Select the countries you've", span("visited", style = "color:green")),
+			h5("Select the countries you've", span("visited", style = "color:#25a31a")),
 			selectInput("visited", label = NULL, 
 						choices = homeList, 
 						multiple = T, selectize = T),
