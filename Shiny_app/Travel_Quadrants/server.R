@@ -4,7 +4,7 @@
 
 
 library(shiny); require(dplyr); require(ggplot2); require(scales); 
-require(reshape2); require(fmsb)
+require(reshape2); require(fmsb); require(ggrepel)
 
 ## this code only runs once, when app is published ---------------
 rawData <- readRDS("data/country_data.rds")
@@ -173,12 +173,11 @@ shinyServer(function(input, output) {
 							   breaks = c(0, 25000, 50000, 75000, 100000),
 							   labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
 							   limits = c(0, 105000)) +
-			
-			# expand_limits(x = 0, y = 0) +
 			theme(text = element_text(family = "sans", size = 16, color = "#3C3C3C"),
 				  plot.title = element_text(size = 16, face = "bold"),
 				  plot.caption = element_text(face = "italic", size = 10),
-				  axis.title = element_text(face = "bold")) +
+				  axis.title = element_text(face = "bold"),
+				  plot.margin = unit(c(0, 1.7, 0, 0), "cm")) +
 			guides(color = "none", alpha = "none", size = "none")
 		g
 		
@@ -238,18 +237,14 @@ shinyServer(function(input, output) {
 		# 				variable.name = "dim")
 
 		if (req(!is.null(click))) {
-			
+			par(mar = c(0,0,0,0))
 			radarchart(radar_data, axistype = 1, pty = 16, 
 					   pcol = colors_border, plwd = 2, plty = 1, pfcol = colors_in,
 					   cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,100,25), 
-					   cglwd=0.8, vlcex=0.8)
+					   cglwd=0.8, vlcex=1)
 			
-			legend(x=0.7, y=1.2, legend = c_names, bty = "n", pch=20 , 
-				   col=colors_border , text.col = "black", cex=1.2, pt.cex=3)
-
-			
-			# revise labels
-				
+			legend(x=0.4, y=1.2, legend = c_names, bty = "n", pch=20, 
+				   col=colors_border , text.col = "black", cex=1, pt.cex=3)
 		}
 	})
 	
@@ -265,8 +260,8 @@ shinyServer(function(input, output) {
 			}
 			else {
 			country <- gsub(" ", "_", point$Country)
-			HTML(paste0("Read more about ", point$Country, " on <a href= 'https://en.wikipedia.org/wiki/", 
-						country, "'> Wikipedia </a>"))
+			p(align = "right", HTML(paste0("Read more about ", point$Country, " on <a href= 'https://en.wikipedia.org/wiki/", 
+						country, "'> Wikipedia </a>")))
 			}
 		}
 		
