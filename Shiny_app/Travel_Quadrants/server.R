@@ -86,13 +86,15 @@ shinyServer(function(input, output) {
 	# by the largest Euclidean distance from home and all visited countries.
 	recommend <- function(X, visited, home) {
 		
-		# 1. subset the dataset to include only CD_norm and the wealth norm metric
+		# 1. subset the dataset to include only the culture dims and the wealth norm metric
 		# 
-		rdata <- select(X, CD_norm, y_var_norm) # putting wealth metric on equal footing
-		
+		rdata <- X %>% select(IDV, IND, LTO, MAS, PDI, UAI, y_var_norm) %>% 
+					   mutate(y_var_norm = sqrt(6)*y_var_norm) # putting wealth metric on equal footing
+		rownames(rdata) <- X$Country
+			
 		# 2. generate a distance matrix for all countries
 		rdist <- as.data.frame(as.matrix(dist(rdata)))
-		
+
 		current <- c(home, visited)
 		
 		# 3. subset the distance matrix for only the rows corresponding to visited
@@ -159,12 +161,12 @@ shinyServer(function(input, output) {
 	})
 	
 	x_label <- reactive ({
-		paste0("Cultural Difference vs. ", home(), " (", Xmethod_label(), ")")
+		paste0("Cultural Difference from ", home(), " (", Xmethod_label(), ")")
 	})
 	
 	y_label <- reactive({
 		if(input$Ymethod == "GDP") "GDP per capita"
-		else "Household Consumption Expenditure per capita"
+		else "HH Consumption Expenditure per capita"
 	})
 	
 	
