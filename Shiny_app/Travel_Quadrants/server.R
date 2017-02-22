@@ -43,44 +43,18 @@ edist <- function(X, home_country) {
 	df
 }
 
-# function that, given a dataset with a cultural diff variable and input
-# country vectors, returns a vector of recommended travel destinations determined
-# by the largest Euclidean distance from home and all visited countries.
-recommend <- function(X, visited, home) {
-
-	# 1. subset the dataset to include only CD_norm and GDPPC_norm
-	# 
-	rdata <- select(X, CD_norm, GDPPC_norm) # putting GDP on equal footing
-
-	# 2. generate a distance matrix for all countries
-	rdist <- as.data.frame(as.matrix(dist(rdata)))
-	
-	current <- c(home, visited)
-
-	# 3. subset the distance matrix for only the rows corresponding to visited
-	# 	 and home countries and columns corresponding to all other countries
-	r_df <- rdist %>% filter(row.names(rdist) %in% current)
-	r_df2 <- r_df[, -which(names(r_df) %in% current)]
-
-	# 4. summarize (mean, min, median, other?) by column.
-	r_means <- summarize_each(r_df2, funs(min)) # POTENTIALLY add UI control????
-					 
-	# 5. The 3 columns with the largest resulting values are the recommended countries
-	recs <- names(head(sort(unlist(r_means), decreasing = T),3))
+# function that returns a dataset with GDPPC as the Y variables
+GDP <- function(X) {
+	GDP_df <- X %>% select(-CEXPC, -CEXPC_norm) %>%
+		rename(y_var_raw = GDPPC, y_var_norm = GDPPC_norm)
 }
 
-# function that, given a dataset and input + recommended country vectors, 
-# returns a vector denoting country types
-my_countries <- function(X, visited, home, recommended) {
-	temp <- data.frame("country" = X$Country,
-					   "type" = vector(mode = "character", length = nrow(X)))
-	ifelse(temp$country %in% home, temp$type <- "home",
-		   ifelse(temp$country %in% recommended, temp$type <- "recommended",
-		   	   ifelse(temp$country %in% visited, temp$type <- "visited",
-		   	   	   temp$type <- "other")))
+# function that returns a dataset with CEXPC as the Y variables
+CEX <- function(X) {
+	GDP_df <- X %>% select(-GDPPC, -GDPPC_norm) %>%
+		rename(y_var_raw = CEXPC, y_var_norm = CEXPC_norm)
 }
 
-cult_measures <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
 
 # set up styles for dimensions radar chart
 colors_border <- c(alpha("blue", .9),
@@ -96,50 +70,101 @@ shinyServer(function(input, output) {
 
 	
 	# interactive selection of cultural difference method
-	CDmethod <- reactive({
-		if (input$method == "Cultural Difference Index") {CDI}
+	Xmethod <- reactive({
+		if (input$Xmethod == "Cultural Difference Index") {CDI}
 		else edist
 	})
 	
+	# interactive selection of wealth metric
+	Ymethod <- reactive({
+		if (input$Ymethod == "GDP") {GDP}
+		else CEX
+	})
+	
+	# function that, given a dataset with a cultural diff variable and input
+	# country vectors, returns a vector of recommended travel destinations determined
+	# by the largest Euclidean distance from home and all visited countries.
+	recommend <- function(X, visited, home) {
+		
+		# 1. subset the dataset to include only CD_norm and the wealth norm metric
+		# 
+		rdata <- select(X, CD_norm, y_var_norm) # putting wealth metric on equal footing
+		
+		# 2. generate a distance matrix for all countries
+		rdist <- as.data.frame(as.matrix(dist(rdata)))
+		
+		current <- c(home, visited)
+		
+		# 3. subset the distance matrix for only the rows corresponding to visited
+		# 	 and home countries and columns corresponding to all other countries
+		r_df <- rdist %>% filter(row.names(rdist) %in% current)
+		r_df2 <- r_df[, -which(names(r_df) %in% current)]
+		
+		# 4. summarize (mean, min, median, other?) by column.
+		r_means <- summarize_each(r_df2, funs(min)) # POTENTIALLY add UI control????
+		
+		# 5. The 3 columns with the largest resulting values are the recommended countries
+		recs <- names(head(sort(unlist(r_means), decreasing = T),3))
+	}
+	
+	# function that, given a dataset and input + recommended country vectors, 
+	# returns a vector denoting country types
+	my_countries <- function(X, visited, home, recommended) {
+		temp <- data.frame("country" = X$Country,
+						   "type" = vector(mode = "character", length = nrow(X)))
+		ifelse(temp$country %in% home, temp$type <- "home",
+			   ifelse(temp$country %in% recommended, temp$type <- "recommended",
+			   	   ifelse(temp$country %in% visited, temp$type <- "visited",
+			   	   	   temp$type <- "other")))
+	}
+	
+	# interactive calculation of CD and production of new dataset
+	dataCD <- reactive({Xmethod()(rawData,home())})
+	
+	# interactive selection of Y variable
+	dataY <- reactive({Ymethod()(dataCD())})
+	
 	recommended <- reactive({
-		recommend(dataCD(), visited(), home())
+		recommend(dataY(), visited(), home())
 	})
 	
 	point_styles <- reactive ({
-		my_countries(dataCD(), visited(), home(), recommended())
+		my_countries(dataY(), visited(), home(), recommended())
 	})
-	
-	# interactive calculation of CD and production of new dataset
-	dataCD <- reactive({CDmethod()(rawData,home())})
 	
 	# interactive addition of country type variable to dataset
 	plotdata <- reactive({
-		mutate(dataCD(), my_countries = as.factor(point_styles()))
+		mutate(dataY(), my_countries = as.factor(point_styles()))
 	})
 	
-	## code from here on down runs each time inputs are updated--------
-	# eventually renderUI() calls will go here
-	# out
-	
 	# render the scatterplot
-	method_label <- reactive({
-		if(input$method == "Cultural Difference Index") "Index"
+	Xmethod_label <- reactive({
+		if(input$Xmethod == "Cultural Difference Index") "Index"
 		else "Euclidean Distance"
 	})
 	
-	x_axis <- reactive({
-		if(input$method == "Cultural Difference Index") {
-			list(breaks = c(0, 10, 20, 30, 40, 50, 60, 70),
-			labels = c(home(), "10", "20", "30", "40", "50", "60", "70"))
+	y_axis <- reactive({
+		if(input$Ymethod == "GDP") {
+			list(name = y_label(),
+				 breaks = c(0, 25000, 50000, 75000, 100000),
+				 labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
+				 limits = c(0, 105000))
 		}
 		else {
-			list(breaks = c(0, 20, 40, 60, 80, 100),
-			labels = c(home(), "20", "40", "60", "80", "100"))
+			list(name = y_label(),
+				 breaks = c(0, 10000, 20000, 30000, 40000),
+				 labels = c("$0", "$10k", "$20k", "$30k", "$40k"),
+				 limits = c(0, 40000))
 		}
 	})
 	
 	x_label <- reactive ({
-		paste0("Cultural Difference vs. ", home(), " (", method_label(), ")")
+		paste0("Cultural Difference vs. ", home(), " (", Xmethod_label(), ")")
+	})
+	
+	y_label <- reactive({
+		if(input$Ymethod == "GDP") "GDP per capita"
+		else "Household Consumption Expenditure per capita"
 	})
 	
 	
@@ -149,7 +174,7 @@ shinyServer(function(input, output) {
 	})
 	
 	output$plot <- renderPlot({
-		g <- ggplot(plotdata(), aes(x = CD_norm, y = GDPPC, alpha = my_countries,
+		g <- ggplot(plotdata(), aes(x = CD_norm, y = y_var_raw, alpha = my_countries,
 							   color = my_countries, size = my_countries)) +
 			theme_classic() +
 			geom_point() +
@@ -169,10 +194,7 @@ shinyServer(function(input, output) {
 							   breaks = c(0, 25, 50, 75),
 							   labels = c(home(), "25", "50", "75"),
 							   limits = c(0, 75)) +
-			scale_y_continuous(name = "GDP Per Capita",
-							   breaks = c(0, 25000, 50000, 75000, 100000),
-							   labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
-							   limits = c(0, 105000)) +
+			do.call(scale_y_continuous, y_axis()) +
 			theme(text = element_text(family = "sans", size = 16, color = "#3C3C3C"),
 				  plot.title = element_text(size = 16, face = "bold"),
 				  plot.caption = element_text(face = "italic", size = 10),
@@ -187,11 +209,17 @@ shinyServer(function(input, output) {
 		}
 	})
 	
+	# reactive y_var label for the tooltip
+	y_tooltip <- reactive({
+		if(input$Ymethod == "GDP") "GDP"
+		else "CEX"
+	})
+	
 	# render the hover tooltip
 	output$hover_info <- renderUI({
 		hover <- input$plot_hover
 		point <- nearPoints(plotdata(), hover, xvar = "CD_norm",
-							yvar = "GDPPC", maxpoints = 1, addDist = T)
+							yvar = "y_var_raw", maxpoints = 1, addDist = T)
 		if (nrow(point) == 0) return(NULL)
 			# the following code borrowed from Pawel via, https://gitlab.com/snippets/16220
 			# calculate point position INSIDE the image as percent of total dimensions
@@ -212,8 +240,8 @@ shinyServer(function(input, output) {
 			
 			wellPanel(
 				style = style,
-				HTML(paste("<b>",as.character(point$Country),"</b>"), "<br/>",
-					 "<b>GDP: </b>", dollar_format()(point$GDPPC), "<br/>",
+				HTML(paste0("<b>",as.character(point$Country),"</b>"), "<br/>",
+					 paste0("<b>",y_tooltip(),": </b>"), dollar_format()(point$y_var_raw), "<br/>",
 					 "<b>Culture Diff: </b>", round(point$CD_norm,0), "<br/>"
 					 )
 			)
@@ -224,17 +252,13 @@ shinyServer(function(input, output) {
 	output$click_plot <- renderPlot({
 		click <- input$plot_click
 		point <- nearPoints(plotdata(), click, xvar = "CD_norm",
-							yvar = "GDPPC", maxpoints = 1)
+							yvar = "y_var_raw", maxpoints = 1)
 		point_home <- rbind(filter(plotdata(), Country == home()), point)
 		
 		radar_data <- rbind(rep(100, 6), rep(0, 6), 
 							select(point_home, IDV, IND, LTO, MAS, PDI, UAI))
 		
 		c_names <- c(home(), as.character(point$Country))
-
-		# bardata <- melt(point_plus_home, id.vars = "Country", 
-		# 				measure.vars = cult_measures, value.name = "score",
-		# 				variable.name = "dim")
 
 		if (req(!is.null(click))) {
 			par(mar = c(0,0,0,0))
@@ -252,7 +276,7 @@ shinyServer(function(input, output) {
 	output$click_url <- renderUI ({
 		click <- input$plot_click
 		point <- nearPoints(plotdata(), click, xvar = "CD_norm",
-							yvar = "GDPPC", maxpoints = 1)
+							yvar = "y_var_raw", maxpoints = 1)
 		
 		if (req(!is.null(click))) {
 			if (length(point$Country) == 0) {
