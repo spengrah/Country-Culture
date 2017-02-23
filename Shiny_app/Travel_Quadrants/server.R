@@ -249,18 +249,24 @@ shinyServer(function(input, output) {
 			)
 	})
 	
+	# the click
+	click <- reactive({input$plot_click})
+	
+	# data for the clicked country
+	point <- reactive({
+		nearPoints(plotdata(), click(), xvar = "CD_norm",
+				   yvar = "y_var_raw", maxpoints = 1)
+	})
+	
 	# render the cultural dimensions radar chart
 	# HOW BIG SHOULD THIS CHART BE?
 	output$click_plot <- renderPlot({
-		click <- input$plot_click
-		point <- nearPoints(plotdata(), click, xvar = "CD_norm",
-							yvar = "y_var_raw", maxpoints = 1)
-		point_home <- rbind(filter(plotdata(), Country == home()), point)
+		point_home <- rbind(filter(plotdata(), Country == home()), point())
 		
 		radar_data <- rbind(rep(100, 6), rep(0, 6), 
 							select(point_home, IDV, IND, LTO, MAS, PDI, UAI))
 		
-		c_names <- c(home(), as.character(point$Country))
+		c_names <- c(home(), as.character(point()$Country))
 
 		if (req(!is.null(click))) {
 			par(mar = c(0,0,0,0))
@@ -276,18 +282,15 @@ shinyServer(function(input, output) {
 	
 	# render the wikipedia URL
 	output$click_url <- renderUI ({
-		click <- input$plot_click
-		point <- nearPoints(plotdata(), click, xvar = "CD_norm",
-							yvar = "y_var_raw", maxpoints = 1)
-		
-		if (req(!is.null(click))) {
-			if (length(point$Country) == 0) {
+		if (req(!is.null(click()))) {
+			country_name <- point()$Country
+			if (length(country_name) == 0) {
 				HTML(" ")
 			}
 			else {
-			country <- gsub(" ", "_", point$Country)
-			p(align = "right", HTML(paste0("Read more about ", point$Country, " on <a href= 'https://en.wikipedia.org/wiki/", 
-						country, "'> Wikipedia </a>")))
+			country_url <- gsub(" ", "_", country_name)
+			p(align = "right", HTML(paste0("Read more about ", country_name, " on <a href= 'https://en.wikipedia.org/wiki/", 
+						country_url, "'> Wikipedia </a>")))
 			}
 		}
 		
