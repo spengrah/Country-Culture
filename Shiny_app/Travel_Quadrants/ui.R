@@ -2,7 +2,7 @@
 # User interface definition for "Where Should I Travel Next?" shiny application
 #
 
-library(shiny)
+library(shiny); require(leaflet)
 
 dataset <- readRDS("data/country_data.rds")
 homeList <- dataset[,1]
@@ -10,141 +10,89 @@ homeList <- dataset[,1]
 
 # Define UI
 shinyUI(navbarPage(
-	# facebook opengraph properties
-	HTML("<meta property=\"og:title\" content=\"Where Should I Travel Next?\" />
-		<meta property=\"og:description\" content=\"Diversify your travel destinations\" />"),
-	
-	# facebook share button javascript SDK
-	HTML("<div id=\"fb-root\"></div>
-		<script>(function(d, s, id) {
-			var js, fjs = d.getElementsByTagName(s)[0];
-			if (d.getElementById(id)) return;
-			js = d.createElement(s); js.id = id;
-			js.src = \"//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.8\";
-			fjs.parentNode.insertBefore(js, fjs);
-		}(document, 'script', 'facebook-jssdk'));</script>"),
-	
-	# google analytics script
-	HTML("<script>
-		 	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-		 		(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-		 		m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-		 	})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
-		 
-		 ga('create', 'UA-92510529-1', 'auto');
-		 ga('send', 'pageview');
-		 
-		 </script>"),
-
+	## to add to head---------------
+	# # facebook opengraph properties
+	# HTML("<meta property=\"og:title\" content=\"Where Should I Travel Next?\" />
+	# 	<meta property=\"og:description\" content=\"Diversify your travel destinations\" />"),
+	# 
+	# # facebook share button javascript SDK
+	# HTML("<div id=\"fb-root\"></div>
+	# 	<script>(function(d, s, id) {
+	# 		var js, fjs = d.getElementsByTagName(s)[0];
+	# 		if (d.getElementById(id)) return;
+	# 		js = d.createElement(s); js.id = id;
+	# 		js.src = \"//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.8\";
+	# 		fjs.parentNode.insertBefore(js, fjs);
+	# 	}(document, 'script', 'facebook-jssdk'));</script>"),
+	# 
+	# # google analytics script
+	# HTML("<script>
+	# 	 	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+	# 	 		(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+	# 	 		m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+	# 	 	})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+	# 	 
+	# 	 ga('create', 'UA-92510529-1', 'auto');
+	# 	 ga('send', 'pageview');
+	# 	 
+	# 	 </script>"),
+	# 
+	# # Facebook share button
+	# HTML("<div class=\"fb-share-button\" 
+	# 	 data-href=\"https://spengrah.shinyapps.io/travel_destination_diversity/\" 
+	# 	 data-layout=\"button_count\" 
+	# 	 data-mobile-iframe=\"true\"><a class=\"fb-xfbml-parse-ignore\" 
+	# 	 target=\"_blank\" href=\"https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fspengrah.shinyapps.io%2Ftravel_destination_diversity%2F&amp;src=sdkpreparse\">Share</a></div>"),
+	# 
+	# # twitter anchor element
+	# HTML("<a class=\"twitter-share-button\"
+	# 	 href=\"https://twitter.com/intent/tweet?text=Where%20Should%20You%20Travel%20Next&url=https://spengrah.shinyapps.io/travel_destination_diversity/&via=spengrah\"
+	# 	 data-size=\"large\">
+	# 	 Tweet</a>"),
+	## above here is head stuff--------
 	title = "Where Should I Travel Next?",
 	position = "fixed-top",
 	id = "nav",
 	tabPanel(
-		title = HTML("Recommendations"),
+		title = "Recommendations",
+		tags$style(type="text/css", "body {padding-top: 55px;}"),
 		fluidRow(
-			column(11,
-			   tags$style(type="text/css", "body {padding-top: 55px;}"),
-			   h5("Based on your home and the countries you've already visited, see your", 
-			      span("recommended", style = "color:red"), "travel destinations"),
-			   br()
-			   
-			),
+			# TEMPORARY: recommendation list
+			# tableOutput(outputId = "recs"),
 			
-			column(1,
-				   tags$style(type="text/css", "body {padding-top: 55px;}"),
-				   
-				   # Facebook share button
-				   HTML("<div class=\"fb-share-button\" 
-			   	 	data-href=\"https://spengrah.shinyapps.io/travel_destination_diversity/\" 
-			   	 	data-layout=\"button_count\" 
-			   	 	data-mobile-iframe=\"true\"><a class=\"fb-xfbml-parse-ignore\" 
-			   	 	target=\"_blank\" href=\"https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fspengrah.shinyapps.io%2Ftravel_destination_diversity%2F&amp;src=sdkpreparse\">Share</a></div>"),
-				   
-				   # twitter anchor element
-				   HTML("<a class=\"twitter-share-button\"
-				   	 href=\"https://twitter.com/intent/tweet?text=Where%20Should%20You%20Travel%20Next&url=https://spengrah.shinyapps.io/travel_destination_diversity/&via=spengrah\"
-				   	 data-size=\"large\">
-				   	 Tweet</a>")
-			)
+			tags$style(type = "text/css", ".outer {position: fixed; top: 41px; left: 0; right: 0; bottom: 0; overflow: hidden; padding: 0}"),
 			
-		),
-		
-		fluidRow(
-			
-			# div to act as the ancestral reference point for the hover code
 			div(
-				style = "position.relative",
-				# scatterplot
-				plotOutput(outputId = "plot",
-						   click = clickOpts(id = "plot_click"),
-						   hover = hoverOpts(id ="plot_hover",
-						   				  delay = 100,
-						   				  delayType = "debounce")),
-				# hover tooltip
-				uiOutput("hover_info")
+				class = "outer",
+				# leaflet map goes here
+				leafletOutput(outputId = "my_map", width = "100%", height = "100%"),
 				
-			),
-				# Sidebar with input widgets
+				# Input controls
 				absolutePanel(id = "controls", class = "panel panel-default", fixed = TRUE,
 							  draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
-							  width = 300, height = "100%",
-					# 1. single dropdown list to select home country (keep static)
-					h5("Select your ", span("home", style = "color:blue"), "country"),
-					selectInput("home", label = NULL,
-								choices = homeList,
-								selected = "United States",
-								selectize = T),
-					# 2. multiple dropdown list to select countries visited
-					h5("Select the countries you've", span("visited", style = "color:#25a31a")),
-					selectInput("visited", label = NULL, 
-								choices = homeList, 
-								multiple = T, selectize = T),
-					
-					# 3. single dropdown list to select cultural distance method
-					# h5("Select a cultural difference algorithm*"),
-					# selectInput("Xmethod", label = NULL, 
-					# 			choices = list("Euclidean Distance", "Cultural Difference Index"),
-					# 			selected = "Euclidean Distance",
-					# 			multiple = F, selectize = F),
-					
-					# 4. single dropdown list to select y-axis variable
-					h5("Select a country wealth metric (per capita)**"),
-					selectInput("Ymethod", label = NULL, 
-								choices = list("Household Consumption (CEX)", "GDP"),
-								selected = "Household Consumption (CEX)",
-								multiple = F, selectize = F)
-					)
-				
-
+							  width = 300, height = "90%",
+							  # 1. single dropdown list to select home country (keep static)
+							  h5("Select your ", span("home", style = "color:blue"), "country"),
+							  selectInput("home", label = NULL,
+							  			choices = homeList,
+							  			selected = "United States",
+							  			selectize = T),
+							  # 2. multiple dropdown list to select countries visited
+							  h5("Select the countries you've", span("visited", style = "color:#25a31a")),
+							  selectInput("visited", label = NULL, 
+							  			choices = homeList, 
+							  			multiple = T, selectize = T),
+							  
+							  # 4. single dropdown list to select y-axis variable
+							  h5("Select a country wealth metric (per capita)**"),
+							  selectInput("Ymethod", label = NULL, 
+							  			choices = list("Household Consumption (CEX)", "GDP"),
+							  			selected = "Household Consumption (CEX)",
+							  			multiple = F, selectize = F)
+				)
 			)
-		
-		# fluidRow(
-		# 	column(4,
-		# 	   h4("Hoftede's Cultural Dimensions"),
-		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "IDV"),": Individualism vs. Collectivism"))),
-		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "UAI"),": Uncertainty Avoidance Index"))),
-		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "PDI"),": Power Distance Index"))),
-		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "MAS"),": Masculinity vs. Femininity"))),
-		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "LTO"),": Long-term Orientation"))),
-		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "IND"),": Indulgence vs. Restraint"))),
-		# 	   br(),
-		# 
-		# 	   helpText("See the More Info tab for...more info")
-		# 
-		# 	),
-		# 	
-		# 	column(8,
-		# 		   hr(),
-		# 		   helpText("Click on any point above to see how that country compares to your home country's culture"),
-		# 		   # clicked country cultural dimensions bar plot
-		# 		   plotOutput("click_plot"),
-		# 		   br(),
-		# 		   
-		# 		   # clicked country URL
-		# 		   htmlOutput("click_url")
-		# 	)
-		# 
-		# )
+			)
+
 	),
 	
 	tabPanel(
@@ -171,6 +119,15 @@ shinyUI(navbarPage(
 					  "which is the most common measure of a country's wealth; or you can use Household Consumption",
 					  "Expenditure per capita, which in my assessment better captures what visiting a country would",
 					  "be like in economic terms"),
+					br(),
+					
+					h5("Hoftede's Cultural Dimensions"),
+				   p(HTML(paste0(tags$span(style = "font-weight:bold", "IDV"),": Individualism vs. Collectivism"))),
+				   p(HTML(paste0(tags$span(style = "font-weight:bold", "UAI"),": Uncertainty Avoidance Index"))),
+				   p(HTML(paste0(tags$span(style = "font-weight:bold", "PDI"),": Power Distance Index"))),
+				   p(HTML(paste0(tags$span(style = "font-weight:bold", "MAS"),": Masculinity vs. Femininity"))),
+				   p(HTML(paste0(tags$span(style = "font-weight:bold", "LTO"),": Long-term Orientation"))),
+				   p(HTML(paste0(tags$span(style = "font-weight:bold", "IND"),": Indulgence vs. Restraint"))),
 					br(),
 					
 					h5("Cultural Difference Metrics"),

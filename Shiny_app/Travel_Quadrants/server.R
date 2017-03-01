@@ -4,7 +4,7 @@
 
 
 library(shiny); require(dplyr); require(ggplot2); require(scales); 
-require(reshape2); require(fmsb); require(ggrepel)
+require(tidyr); require(fmsb); require(ggrepel); require(leaflet)
 
 ## this code only runs once, when app is published ---------------
 rawData <- readRDS("data/country_data.rds")
@@ -64,16 +64,10 @@ colors_in <- c(alpha("blue", .4),
 
 ## code inside this unnamed function runs each session ------------
 shinyServer(function(input, output) {
-	# process selected countries
+	# define selected countries
 	home <- reactive({input$home})
 	visited <- reactive({input$visited})
 
-	
-	# interactive selection of cultural difference method
-	# Xmethod <- reactive({
-	# 	if (input$Xmethod == "Cultural Difference Index") {CDI}
-	# 	else edist
-	# })
 	
 	# interactive selection of wealth metric
 	Ymethod <- reactive({
@@ -87,7 +81,6 @@ shinyServer(function(input, output) {
 	recommend <- function(X, visited, home) {
 		
 		# 1. subset the dataset to include only the culture dims and the wealth norm metric
-		# 
 		rdata <- X %>% select(IDV, IND, LTO, MAS, PDI, UAI, y_var_norm) %>% 
 					   mutate(y_var_norm = sqrt(6)*y_var_norm) # putting wealth metric on equal footing
 		rownames(rdata) <- X$Country
@@ -103,11 +96,24 @@ shinyServer(function(input, output) {
 		r_df2 <- r_df[, -which(names(r_df) %in% current)]
 		
 		# 4. summarize (mean, min, median, other?) by column.
-		r_means <- summarize_each(r_df2, funs(min)) # POTENTIALLY add UI control????
+		r_means <- summarize_each(r_df2, funs(min))
 		
-		# 5. The 3 columns with the largest resulting values are the recommended countries
-		recs <- names(head(sort(unlist(r_means), decreasing = T),3))
+		# 5. return an ordered list of countries and their recommend score
+		v <- unlist(r_means)
+		ordered <- order(v, decreasing = T)
+		recs <- cbind(names(v[ordered]), round(v[ordered],1))
 	}
+	
+	output$my_map <- renderLeaflet({
+		leaflet() %>% addTiles()
+	})
+	
+	##TEMPORARY: print the list of countries and recommend scores as a simple table
+	output$recs <- renderTable({
+		recommend(dataY(), visited(), home())
+	})
+	
+	
 	
 	# function that, given a dataset and input + recommended country vectors, 
 	# returns a vector denoting country types
@@ -133,91 +139,9 @@ shinyServer(function(input, output) {
 	point_styles <- reactive ({
 		my_countries(dataY(), visited(), home(), recommended())
 	})
-	
-	# interactive addition of country type variable to dataset
-	plotdata <- reactive({
-		mutate(dataY(), my_countries = as.factor(point_styles()))
-	})
-	
-	# render the scatterplot
-	# Xmethod_label <- reactive({
-	# 	if(input$Xmethod == "Cultural Difference Index") "Index"
-	# 	else "Euclidean Distance"
-	# })
-	
-	y_axis <- reactive({
-		if(input$Ymethod == "GDP") {
-			list(name = y_label(),
-				 breaks = c(0, 25000, 50000, 75000, 100000),
-				 labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
-				 limits = c(0, 105000))
-		}
-		else {
-			list(name = y_label(),
-				 breaks = c(0, 10000, 20000, 30000, 40000),
-				 labels = c("$0", "$10k", "$20k", "$30k", "$40k"),
-				 limits = c(0, 40000))
-		}
-	})
-	
-	# x_label <- reactive ({
-	# 	paste0("Cultural Difference from ", home(), " (", Xmethod_label(), ")")
-	# })
-	
-	y_label <- reactive({
-		if(input$Ymethod == "GDP") "GDP per capita"
-		else "HH Consumption Expenditure per capita"
-	})
-	
-	
-	point_labels <- reactive({
-			a <- as.character(plotdata()$Country)
-			replace(a, !(a %in% recommended()), "")
-	})
-	
-	output$plot <- renderPlot({
-		g <- ggplot(plotdata(), aes(x = CD_norm, y = y_var_raw, alpha = my_countries,
-							   color = my_countries, size = my_countries)) +
-			theme_classic() +
-			geom_point() +
-			scale_color_manual(values = c("visited" = "#25a31a", 
-										  "other" = "black",
-										  "home" = "blue",
-										  "recommended" = "red")) +
-			# figure out how to layer the colors over the grey
-			scale_alpha_manual(values = c("visited" = 1,
-										  "other" = .3, "home" = 1,
-										  "recommended" = 1)) +
-			scale_size_manual(values = c("visited" = 5, 
-										 "other" = 5,
-										 "home" = 5,
-										 "recommended" = 6)) +
-			scale_x_continuous(paste0("Cultural Difference from ", home()),
-							   breaks = c(0, 25, 50, 75),
-							   labels = c(home(), "25", "50", "75"),
-							   limits = c(0, 75)) +
-			do.call(scale_y_continuous, y_axis()) +
-			theme(text = element_text(family = "sans", size = 16, color = "#3C3C3C"),
-				  plot.title = element_text(size = 16, face = "bold"),
-				  plot.caption = element_text(face = "italic", size = 10),
-				  axis.title = element_text(face = "bold"),
-				  plot.margin = unit(c(0, 1.7, 0, 0), "cm")) +
-			guides(color = "none", alpha = "none", size = "none")
-		g
-		
-		if (req(!is.null(point_labels))) {
-			g + geom_text_repel(label = point_labels(), size = 4.5, color = "#727272",
-								segment.color = NA, point.padding = unit(4, "pt"), nudge_y = .15)
-		}
-	})
-	
-	# reactive y_var label for the tooltip
-	y_tooltip <- reactive({
-		if(input$Ymethod == "GDP") "GDP"
-		else "CEX"
-	})
-	
-	# render the hover tooltip
+
+
+	# tooltip
 	output$hover_info <- renderUI({
 		hover <- input$plot_hover
 		point <- nearPoints(plotdata(), hover, xvar = "CD_norm",
@@ -259,7 +183,6 @@ shinyServer(function(input, output) {
 	})
 	
 	# render the cultural dimensions radar chart
-	# HOW BIG SHOULD THIS CHART BE?
 	output$click_plot <- renderPlot({
 		point_home <- rbind(filter(plotdata(), Country == home()), point())
 		
