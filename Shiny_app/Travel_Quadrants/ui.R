@@ -38,6 +38,7 @@ shinyUI(navbarPage(
 
 	title = "Where Should I Travel Next?",
 	position = "fixed-top",
+	id = "nav",
 	tabPanel(
 		title = HTML("Recommendations"),
 		fluidRow(
@@ -69,9 +70,24 @@ shinyUI(navbarPage(
 		),
 		
 		fluidRow(
-			column(4,
+			
+			# div to act as the ancestral reference point for the hover code
+			div(
+				style = "position.relative",
+				# scatterplot
+				plotOutput(outputId = "plot",
+						   click = clickOpts(id = "plot_click"),
+						   hover = hoverOpts(id ="plot_hover",
+						   				  delay = 100,
+						   				  delayType = "debounce")),
+				# hover tooltip
+				uiOutput("hover_info")
+				
+			),
 				# Sidebar with input widgets
-				wellPanel(
+				absolutePanel(id = "controls", class = "panel panel-default", fixed = TRUE,
+							  draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
+							  width = 300, height = "100%",
 					# 1. single dropdown list to select home country (keep static)
 					h5("Select your ", span("home", style = "color:blue"), "country"),
 					selectInput("home", label = NULL,
@@ -85,11 +101,11 @@ shinyUI(navbarPage(
 								multiple = T, selectize = T),
 					
 					# 3. single dropdown list to select cultural distance method
-					h5("Select a cultural difference algorithm*"),
-					selectInput("Xmethod", label = NULL, 
-								choices = list("Euclidean Distance", "Cultural Difference Index"),
-								selected = "Euclidean Distance",
-								multiple = F, selectize = F),
+					# h5("Select a cultural difference algorithm*"),
+					# selectInput("Xmethod", label = NULL, 
+					# 			choices = list("Euclidean Distance", "Cultural Difference Index"),
+					# 			selected = "Euclidean Distance",
+					# 			multiple = F, selectize = F),
 					
 					# 4. single dropdown list to select y-axis variable
 					h5("Select a country wealth metric (per capita)**"),
@@ -98,52 +114,37 @@ shinyUI(navbarPage(
 								selected = "Household Consumption (CEX)",
 								multiple = F, selectize = F)
 					)
-				),
 				
-				column(8,
-					   # div to act as the ancestral reference point for the hover code
-					   div(
-					   	style = "position.relative",
-					   	# scatterplot
-					   	plotOutput(outputId = "plot",
-					   			   click = clickOpts(id = "plot_click"),
-					   			   hover = hoverOpts(id ="plot_hover",
-					   			   				  delay = 100,
-					   			   				  delayType = "debounce")),
-					   	# hover tooltip
-					   	uiOutput("hover_info")
-					   	
-					   )
-				)
-			),
-		
-		fluidRow(
-			column(4,
-			   h4("Hoftede's Cultural Dimensions"),
-			   p(HTML(paste0(tags$span(style = "font-weight:bold", "IDV"),": Individualism vs. Collectivism"))),
-			   p(HTML(paste0(tags$span(style = "font-weight:bold", "UAI"),": Uncertainty Avoidance Index"))),
-			   p(HTML(paste0(tags$span(style = "font-weight:bold", "PDI"),": Power Distance Index"))),
-			   p(HTML(paste0(tags$span(style = "font-weight:bold", "MAS"),": Masculinity vs. Femininity"))),
-			   p(HTML(paste0(tags$span(style = "font-weight:bold", "LTO"),": Long-term Orientation"))),
-			   p(HTML(paste0(tags$span(style = "font-weight:bold", "IND"),": Indulgence vs. Restraint"))),
-			   br(),
-			   
-			   helpText("See the More Info tab for...more info")
 
-			),
-			
-			column(8,
-				   hr(),
-				   helpText("Click on any point above to see how that country compares to your home country's culture"),
-				   # clicked country cultural dimensions bar plot
-				   plotOutput("click_plot"),
-				   br(),
-				   
-				   # clicked country URL
-				   htmlOutput("click_url")
 			)
-	
-		)
+		
+		# fluidRow(
+		# 	column(4,
+		# 	   h4("Hoftede's Cultural Dimensions"),
+		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "IDV"),": Individualism vs. Collectivism"))),
+		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "UAI"),": Uncertainty Avoidance Index"))),
+		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "PDI"),": Power Distance Index"))),
+		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "MAS"),": Masculinity vs. Femininity"))),
+		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "LTO"),": Long-term Orientation"))),
+		# 	   p(HTML(paste0(tags$span(style = "font-weight:bold", "IND"),": Indulgence vs. Restraint"))),
+		# 	   br(),
+		# 
+		# 	   helpText("See the More Info tab for...more info")
+		# 
+		# 	),
+		# 	
+		# 	column(8,
+		# 		   hr(),
+		# 		   helpText("Click on any point above to see how that country compares to your home country's culture"),
+		# 		   # clicked country cultural dimensions bar plot
+		# 		   plotOutput("click_plot"),
+		# 		   br(),
+		# 		   
+		# 		   # clicked country URL
+		# 		   htmlOutput("click_url")
+		# 	)
+		# 
+		# )
 	),
 	
 	tabPanel(

@@ -11,20 +11,20 @@ rawData <- readRDS("data/country_data.rds")
 
 # function that, given a dataset and a home country, calculates CDI 
 # and returns a new dataset with CDI appended
-CDI <- function(X, home_country) {
-	cdi_matrix <- as.matrix(select(X, IDV, IND, LTO, MAS, PDI, UAI))
-	home_vector <- as.numeric(subset(cdi_matrix, 
-									 row.names(cdi_matrix) == home_country))
-	
-	diffs <- abs(sweep(cdi_matrix, 2, home_vector))
-	diff_sums <- apply(diffs, 1, sum)
-	anti_home <- ifelse(home_vector < 50, 100, 0)
-	anti_diff <- sum(abs(home_vector - anti_home))
-	CD_norm <- 100*(diff_sums/anti_diff)
-	
-	df <- cbind(X, CD_norm)
-	df
-}
+# CDI <- function(X, home_country) {
+# 	cdi_matrix <- as.matrix(select(X, IDV, IND, LTO, MAS, PDI, UAI))
+# 	home_vector <- as.numeric(subset(cdi_matrix, 
+# 									 row.names(cdi_matrix) == home_country))
+# 	
+# 	diffs <- abs(sweep(cdi_matrix, 2, home_vector))
+# 	diff_sums <- apply(diffs, 1, sum)
+# 	anti_home <- ifelse(home_vector < 50, 100, 0)
+# 	anti_diff <- sum(abs(home_vector - anti_home))
+# 	CD_norm <- 100*(diff_sums/anti_diff)
+# 	
+# 	df <- cbind(X, CD_norm)
+# 	df
+# }
 
 # function that, given a dataset and a home country, calculates the Euclidean
 # distance between home and all other countries using all 6 cultural dimensions.
@@ -70,10 +70,10 @@ shinyServer(function(input, output) {
 
 	
 	# interactive selection of cultural difference method
-	Xmethod <- reactive({
-		if (input$Xmethod == "Cultural Difference Index") {CDI}
-		else edist
-	})
+	# Xmethod <- reactive({
+	# 	if (input$Xmethod == "Cultural Difference Index") {CDI}
+	# 	else edist
+	# })
 	
 	# interactive selection of wealth metric
 	Ymethod <- reactive({
@@ -121,7 +121,7 @@ shinyServer(function(input, output) {
 	}
 	
 	# interactive calculation of CD and production of new dataset
-	dataCD <- reactive({Xmethod()(rawData,home())})
+	dataCD <- reactive({edist(rawData,home())})
 	
 	# interactive selection of Y variable
 	dataY <- reactive({Ymethod()(dataCD())})
@@ -140,10 +140,10 @@ shinyServer(function(input, output) {
 	})
 	
 	# render the scatterplot
-	Xmethod_label <- reactive({
-		if(input$Xmethod == "Cultural Difference Index") "Index"
-		else "Euclidean Distance"
-	})
+	# Xmethod_label <- reactive({
+	# 	if(input$Xmethod == "Cultural Difference Index") "Index"
+	# 	else "Euclidean Distance"
+	# })
 	
 	y_axis <- reactive({
 		if(input$Ymethod == "GDP") {
@@ -160,9 +160,9 @@ shinyServer(function(input, output) {
 		}
 	})
 	
-	x_label <- reactive ({
-		paste0("Cultural Difference from ", home(), " (", Xmethod_label(), ")")
-	})
+	# x_label <- reactive ({
+	# 	paste0("Cultural Difference from ", home(), " (", Xmethod_label(), ")")
+	# })
 	
 	y_label <- reactive({
 		if(input$Ymethod == "GDP") "GDP per capita"
@@ -192,7 +192,7 @@ shinyServer(function(input, output) {
 										 "other" = 5,
 										 "home" = 5,
 										 "recommended" = 6)) +
-			scale_x_continuous(x_label(),
+			scale_x_continuous(paste0("Cultural Difference from ", home()),
 							   breaks = c(0, 25, 50, 75),
 							   labels = c(home(), "25", "50", "75"),
 							   limits = c(0, 75)) +
