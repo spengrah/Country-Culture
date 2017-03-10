@@ -4,10 +4,12 @@
 
 
 library(shiny); require(dplyr); require(ggplot2); require(scales); 
-require(tidyr); require(fmsb); require(ggrepel); require(leaflet)
+require(tidyr); require(fmsb); require(ggrepel); require(leaflet); require(maps)
+require(geojsonio); require(jsonlite)
 
 ## this code only runs once, when app is published ---------------
 rawData <- readRDS("data/country_data.rds")
+map_data <- geojson_read("data/countries.geojson", what = "sp")
 
 # function that, given a dataset and a home country, calculates CDI 
 # and returns a new dataset with CDI appended
@@ -75,45 +77,64 @@ shinyServer(function(input, output) {
 		else CEX
 	})
 	
-	# function that, given a dataset with a cultural diff variable and input
-	# country vectors, returns a vector of recommended travel destinations determined
-	# by the largest Euclidean distance from home and all visited countries.
-	recommend <- function(X, visited, home) {
+	# Function to generate recommendations based on min euclidean distance between
+	# new countries and each visited country, within the N-dimensional space created
+	# by the user-selected dimensions. Returns back the input dataset with a
+	# recommendation score appended.
+	recommend <- function(X, visited, home, dims) {
 		
-		# 1. subset the dataset to include only the culture dims and the wealth norm metric
-		rdata <- X %>% select(IDV, IND, LTO, MAS, PDI, UAI, y_var_norm) %>% 
-					   mutate(y_var_norm = sqrt(6)*y_var_norm) # putting wealth metric on equal footing
-		rownames(rdata) <- X$Country
+		# check that all dims are variables in X, and throw an error if not
+		char_dims <- unlist(dims) # coerce dims to vector
+		check <- char_dims %in% names(X)
+		extra_dims <- cbind(char_dims, check)
+		extra_dims <- extra_dims[char_dims == F]
+		
+		if (!is.null(nrow(extra_dims))) {
+			stop(paste("The following dimensions are not present in the dataset:\n",
+					   extra_dims[,1]))
+		}
+		
+		current <- c(home, visited) # vector for all visited countries
+		
+		culture_dims <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
+		
+		# 1. subset the dataset to include only the user-selected dimensions
+		rdata <- X[ ,char_dims]
+		
+		# remove Countries (rows) that don't have complete data for
+		# user-selected dimensions
+		rdata2 <- rdata[complete.cases(rdata),]
+		
+		incompletes <- rdata[!complete.cases(rdata),]$Country
+		
+		# weight the 6 culture dims collectively equally to each other dim
+		if (sum(culture_dims %in% char_dims) == 6) {
+			for(i in culture_dims) {
+				rdata2[, i] <- rdata2[, i]/sqrt(6)
+			}
+		}
 			
 		# 2. generate a distance matrix for all countries
-		rdist <- as.data.frame(as.matrix(dist(rdata)))
-
-		current <- c(home, visited)
+		rdist <- as.data.frame(as.matrix(dist(rdata2)))
 		
 		# 3. subset the distance matrix for only the rows corresponding to visited
-		# 	 and home countries and columns corresponding to all other countries
+		# and home countries...
 		r_df <- rdist %>% filter(row.names(rdist) %in% current)
+		# ...and columns corresponding to all other countries
 		r_df2 <- r_df[, -which(names(r_df) %in% current)]
 		
-		# 4. summarize (mean, min, median, other?) by column.
+		# 4. summarize by column according to min - POTENTIALLY CHANGE THIS
 		r_means <- summarize_each(r_df2, funs(min))
-		
+	
 		# 5. return an ordered list of countries and their recommend score
-		v <- unlist(r_means)
-		ordered <- order(v, decreasing = T)
-		recs <- cbind(names(v[ordered]), round(v[ordered],1))
+		new <- data.frame(Country = names(r_means), score = unlist(r_means))
+		hv <- data.frame(Country = current, score = rep(0, times = length(current)),
+						 row.names = current)
+		incomplete <- data.frame(Country = incompletes, score = rep(NA,
+										times = length(incompletes)))
+		rec_score <- rbind(hv, new, incomplete)
+		result_df <- left_join(X, rec_score, by = "Country")
 	}
-	
-	output$my_map <- renderLeaflet({
-		leaflet() %>% addTiles()
-	})
-	
-	##TEMPORARY: print the list of countries and recommend scores as a simple table
-	output$recs <- renderTable({
-		recommend(dataY(), visited(), home())
-	})
-	
-	
 	
 	# function that, given a dataset and input + recommended country vectors, 
 	# returns a vector denoting country types
@@ -126,21 +147,37 @@ shinyServer(function(input, output) {
 			   	   	   temp$type <- "other")))
 	}
 	
-	# interactive calculation of CD and production of new dataset
-	dataCD <- reactive({edist(rawData,home())})
-	
-	# interactive selection of Y variable
-	dataY <- reactive({Ymethod()(dataCD())})
-	
-	recommended <- reactive({
-		recommend(dataY(), visited(), home())
-	})
-	
-	point_styles <- reactive ({
-		my_countries(dataY(), visited(), home(), recommended())
+	# render the initial map
+	output$my_map <- renderLeaflet({
+		leaflet(map("world", fill = T)) %>% addTiles()
 	})
 
+	# observer to handle recommendation updates based on inputs
+	observe ({
+		dims <- list("IDV", "IND", "LTO", "MAS", "PDI", "UAI", "y_var_norm")
+		recs <- recommend(CEX(rawData), visited(), home(), dims)
+		rec_score <- recs$score
 
+		pal <- colorNumeric(palette = "Blues", domain = rec_score, na.color = "black")
+
+		leafletProxy("my_map", data = map_data) %>%
+			clearShapes() %>%
+			addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,
+						opacity = 1.0, fillOpacity = .5,
+						fillColor = pal(rec_score),
+						stroke = FALSE,
+						highlightOptions = highlightOptions(color = "white", weight = 2,
+															bringToFront = TRUE))
+	})
+
+	
+	##TEMPORARY: print the list of countries and recommend scores as a simple table
+	# output$recs <- renderTable({
+	# 	dims <- list("IDV", "IND", "LTO", "MAS", "PDI", "UAI", "y_var_norm")
+	# 	recs <- recommend(CEX(rawData), visited(), home(), dims)
+	# 	result <- select(recs, Country, score)
+	# })
+	
 	# tooltip
 	output$hover_info <- renderUI({
 		hover <- input$plot_hover
