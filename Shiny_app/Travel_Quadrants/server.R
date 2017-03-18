@@ -8,7 +8,7 @@ require(tidyr); require(fmsb); require(ggrepel); require(leaflet); require(maps)
 require(geojsonio); require(jsonlite)
 
 ## this code only runs once, when app is published ---------------
-rawData <- readRDS("data/country_data.rds")
+rawData <- readRDS("data/country_data2.rds")
 map_data <- geojson_read("data/countries.geojson", what = "sp")
 
 # function that, given a dataset and a home country, calculates CDI 
@@ -47,14 +47,14 @@ edist <- function(X, home_country) {
 
 # function that returns a dataset with GDPPC as the Y variables
 GDP <- function(X) {
-	GDP_df <- X %>% select(-CEXPC, -CEXPC_norm) %>%
-		rename(y_var_raw = GDPPC, y_var_norm = GDPPC_norm)
+	GDP_df <- X %>% select(-CEX, -CEXnorm) %>%
+		rename(y_var_raw = GDP, y_var_norm = GDPnorm)
 }
 
 # function that returns a dataset with CEXPC as the Y variables
 CEX <- function(X) {
-	GDP_df <- X %>% select(-GDPPC, -GDPPC_norm) %>%
-		rename(y_var_raw = CEXPC, y_var_norm = CEXPC_norm)
+	CEX_df <- X %>% select(-GDP, -GDPnorm) %>%
+		rename(y_var_raw = CEX, y_var_norm = CEXnorm)
 }
 
 
@@ -65,7 +65,7 @@ colors_in <- c(alpha("blue", .4),
 			   alpha("#ffba38", .4))
 
 ## code inside this unnamed function runs each session ------------
-shinyServer(function(input, output) {
+shinyServer(function(input, output, session) {
 	# define selected countries
 	home <- reactive({input$home})
 	visited <- reactive({input$visited})
@@ -77,6 +77,7 @@ shinyServer(function(input, output) {
 		else CEX
 	})
 	
+	# ***Recommendation Engine***
 	# Function to generate recommendations based on min euclidean distance between
 	# new countries and each visited country, within the N-dimensional space created
 	# by the user-selected dimensions. Returns back the input dataset with a
@@ -105,7 +106,7 @@ shinyServer(function(input, output) {
 		# user-selected dimensions
 		rdata2 <- rdata[complete.cases(rdata),]
 		
-		incompletes <- rdata[!complete.cases(rdata),]$Country
+		incompletes <- row.names(rdata[!complete.cases(rdata), ])
 		
 		# weight the 6 culture dims collectively equally to each other dim
 		if (sum(culture_dims %in% char_dims) == 6) {
@@ -125,15 +126,37 @@ shinyServer(function(input, output) {
 		
 		# 4. summarize by column according to min - POTENTIALLY CHANGE THIS
 		r_means <- summarize_each(r_df2, funs(min))
-	
-		# 5. return an ordered list of countries and their recommend score
-		new <- data.frame(Country = names(r_means), score = unlist(r_means))
-		hv <- data.frame(Country = current, score = rep(0, times = length(current)),
-						 row.names = current)
-		incomplete <- data.frame(Country = incompletes, score = rep(NA,
-										times = length(incompletes)))
-		rec_score <- rbind(hv, new, incomplete)
-		result_df <- left_join(X, rec_score, by = "Country")
+		
+		# 5. return the dataframe with recommendation score, type, and display color
+		# variables appended
+		new <- data.frame(Country = names(r_means), score = unlist(r_means),
+						  type = "new", stringsAsFactors = F)
+		
+		h <- data.frame(Country = home, score = NA, type = "home", stringsAsFactors = F)
+		
+		if (length(visited) == 0) {v <- data.frame(Country = NA, score = NA,
+												   type = NA)
+		}
+		else {v <- data.frame(Country = visited,
+							  score = NA,
+							  type = "visited", 
+							  stringsAsFactors = F)
+		}
+		
+		if (length(incompletes) == 0) {missing <- data.frame(Country = NA, score = NA,
+														   type = "missing")
+		
+		}
+		else {
+			missing <- data.frame(Country = incompletes,
+								 score = NA,
+							  	 type = "missing",
+								 stringsAsFactors = F)
+		}
+		
+		vars <- rbind(h, new, missing, v)
+
+		result_df <- left_join(X, vars, by = "Country")
 	}
 	
 	# function that, given a dataset and input + recommended country vectors, 
@@ -149,34 +172,82 @@ shinyServer(function(input, output) {
 	
 	# render the initial map
 	output$my_map <- renderLeaflet({
-		leaflet(map("world", fill = T)) %>% addTiles()
+		# leaflet(map("world", fill = T)) %>% addTiles()
+		
+		leaflet() %>%
+			# addTiles(
+			# 	urlTemplate = "https://api.mapbox.com/styles/v1/spengrah/cj04i613t004h2slfa2cz8272/tiles/256/{z}/{x}/{y}?access_token=pk.eyJ1Ijoic3BlbmdyYWgiLCJhIjoiY2l6cDBhZjIzMDA2MzJxbnlldzU5dTdrayJ9.pCqDPsohKbDHnyCOUpDTRA",
+			# 	attribution = 'Maps by <a href="http://www.mapbox.com/">Mapbox</a>'
+			# ) 
+			addProviderTiles("CartoDB.Positron") %>%
+			setView(lng = 60, lat = 37.45, zoom = 2)
 	})
 
 	# observer to handle recommendation updates based on inputs
 	observe ({
-		dims <- list("IDV", "IND", "LTO", "MAS", "PDI", "UAI", "y_var_norm")
-		recs <- recommend(CEX(rawData), visited(), home(), dims)
-		rec_score <- recs$score
-
-		pal <- colorNumeric(palette = "Blues", domain = rec_score, na.color = "black")
-
+		# assign dims according to user input
+		dims <- list("IDV", "IND", "LTO", "MAS", "PDI", "UAI", "CEXnorm"
+					 ,"urbanization", "gini"
+					 )
+		
+		# calculate recommendation scores
+		countries <- recommend(rawData, visited(), home(), dims)
+		countries$type <- as.character(countries$type)
+		
+		# populate country input lists
+		not_missing <- filter(countries, type != "missing")
+		home_list <- sort(filter(not_missing, type != "visited")$Country)
+		visited_list <- sort(filter(not_missing, type != "home")$Country)
+		
+		updateSelectInput(session, "home", choices = home_list, selected = home())
+		updateSelectInput(session, "visited", choices = visited_list, selected = visited())
+		
+		
+		# set up country polygon colors
+		top3 <- head(arrange(countries, desc(score)), 3)$Country
+		rec_score <- countries$score
+		score_alpha <- rec_score/max(rec_score, na.rm = T)
+		
+		colors <- data.frame(Country = countries$Country, 
+							 fill = ifelse(countries$type == "missing", "grey",
+							 			  ifelse(countries$type == "home", "blue",
+						 			   	      ifelse(countries$type == "visited", "green",
+						 		 	   	   	     "red"))),
+							 line = ifelse(countries$type == "missing", "#eaeaea", 
+							 			  ifelse(countries$Country %in% top3, "orange",
+							 			  	   "#919191")),
+							 weight = ifelse(countries$Country %in% top3, 4, 1),
+							 alpha = ifelse(countries$type == "missing", 0,
+							 			   ifelse(countries$type == "home", .6,
+							 			   	   ifelse(countries$type == "visited", .6,
+							 			   	   	   score_alpha)))
+							 )
+		
+		# test <- colors %>% filter(fill != "grey") %>% select(Country, alpha) %>%
+		# 	arrange(desc(alpha))
+		# print(dput(test))
+		
 		leafletProxy("my_map", data = map_data) %>%
 			clearShapes() %>%
-			addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,
-						opacity = 1.0, fillOpacity = .5,
-						fillColor = pal(rec_score),
-						stroke = FALSE,
+			addPolygons(smoothFactor = 0.5, 
+						# fill the polygon
+						fillOpacity = colors$alpha, fillColor = colors$fill,
+						# render the lines
+						stroke = TRUE, opacity = 1, color = colors$line, weight = colors$weight,
 						highlightOptions = highlightOptions(color = "white", weight = 2,
 															bringToFront = TRUE))
 	})
 
-	
+ 
 	##TEMPORARY: print the list of countries and recommend scores as a simple table
-	# output$recs <- renderTable({
-	# 	dims <- list("IDV", "IND", "LTO", "MAS", "PDI", "UAI", "y_var_norm")
-	# 	recs <- recommend(CEX(rawData), visited(), home(), dims)
-	# 	result <- select(recs, Country, score)
-	# })
+	output$recs <- renderTable({
+		dims <- list("IDV", "IND", "LTO", "MAS", "PDI", "UAI", "CEXnorm",
+			 "urbanization", "gini")
+		recs <- recommend(rawData, visited(), home(), dims)
+		result <- recs %>% select(Country, score) %>% arrange(desc(score))
+		print(dput(result))
+		result
+	})
 	
 	# tooltip
 	output$hover_info <- renderUI({

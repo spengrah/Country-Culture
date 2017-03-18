@@ -4,7 +4,7 @@
 
 library(shiny); require(leaflet)
 
-dataset <- readRDS("data/country_data.rds")
+dataset <- readRDS("data/country_data2.rds")
 homeList <- dataset[,1]
 
 
@@ -57,8 +57,7 @@ shinyUI(navbarPage(
 		title = "Recommendations",
 		tags$style(type="text/css", "body {padding-top: 55px;}"),
 		fluidRow(
-			# TEMPORARY: recommendation list
-			# tableOutput(outputId = "recs"),
+
 			
 			tags$style(type = "text/css", ".outer {position: fixed; top: 41px; left: 0; right: 0; bottom: 0; overflow: hidden; padding: 0}"),
 			
@@ -75,7 +74,7 @@ shinyUI(navbarPage(
 							  h5("Select your ", span("home", style = "color:blue"), "country"),
 							  selectInput("home", label = NULL,
 							  			choices = homeList,
-							  			selected = "United States",
+							  			selected = "United States of America",
 							  			selectize = T),
 							  # 2. multiple dropdown list to select countries visited
 							  h5("Select the countries you've", span("visited", style = "color:#25a31a")),
@@ -135,7 +134,9 @@ shinyUI(navbarPage(
 				   p(HTML(paste0(tags$span(style = "font-weight:bold", "CDI"),
 				   			  ": sum of differences between two countries on the 6 dimensions (normalized)"))),
 				   p(HTML(paste0(tags$span(style = "font-weight:bold", "Euclidean distance"),
-				   			  ": the 6-dimensional 'hypotenuse' between two countries (normalized)")))
+				   			  ": the 6-dimensional 'hypotenuse' between two countries (normalized)"))),
+				   # TEMPORARY: recommendation list
+				   tableOutput(outputId = "recs")
 			),
 			column(6,
 				   tags$style(type="text/css", "body {padding-top: 55px;}"),
