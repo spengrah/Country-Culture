@@ -2,14 +2,14 @@
 # User interface definition for "Where Should I Travel Next?" shiny application
 #
 
-library(shiny); require(leaflet)
+library(shiny); require(leaflet); library(shinythemes)
 
-dataset <- readRDS("data/country_data2.rds")
-homeList <- dataset[,1]
+country_list <- sort(rawData[,1])
 
 
 # Define UI
 shinyUI(navbarPage(
+	theme = shinytheme("simplex"),
 	## to add to head---------------
 	# # facebook opengraph properties
 	# HTML("<meta property=\"og:title\" content=\"Where Should I Travel Next?\" />
@@ -58,7 +58,6 @@ shinyUI(navbarPage(
 		tags$style(type="text/css", "body {padding-top: 55px;}"),
 		fluidRow(
 
-			
 			tags$style(type = "text/css", ".outer {position: fixed; top: 41px; left: 0; right: 0; bottom: 0; overflow: hidden; padding: 0}"),
 			
 			div(
@@ -73,13 +72,13 @@ shinyUI(navbarPage(
 							  # 1. single dropdown list to select home country (keep static)
 							  h5("Select your ", span("home", style = "color:blue"), "country"),
 							  selectInput("home", label = NULL,
-							  			choices = homeList,
+							  			choices = country_list,
 							  			selected = "United States of America",
 							  			selectize = T),
 							  # 2. multiple dropdown list to select countries visited
 							  h5("Select the countries you've", span("visited", style = "color:#25a31a")),
-							  selectInput("visited", label = NULL, 
-							  			choices = homeList, 
+							  selectInput("visited", label = NULL,
+							  			choices = country_list, 
 							  			multiple = T, selectize = T),
 							  
 							  # 4. single dropdown list to select y-axis variable
