@@ -57,37 +57,72 @@ shinyUI(navbarPage(
 	# 	 href=\"https://twitter.com/intent/tweet?text=Where%20Should%20You%20Travel%20Next&url=https://spengrah.shinyapps.io/travel_destination_diversity/&via=spengrah\"
 	# 	 data-size=\"large\">
 	# 	 Tweet</a>"),
-	## above here is head stuff--------
+	
+	
 	title = "Where Should I Travel Next?",
 	position = "fixed-top",
 	id = "nav",
 	tabPanel(
+		## CSS--------
+		tags$head(
+			tags$style(HTML("
+			body {
+				padding-top: 55px;
+			}
+			div.outer {
+				position: fixed;
+				top: 41px;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				overflow: hidden;
+				padding: 0
+			}
+			#controls {
+				background-color: white;
+				padding: 5px 15px 15px 15px;
+				cursor: move;
+				opacity: 0.70;
+				zoom: 0.9;
+				transition: opacity 1500ms 400ms;
+			}
+			#controls:hover {
+				opacity: 0.95;
+				transition-delay: 0;
+			}
+			.leaflet-popup-content-wrapper {
+				background-color: white;
+				opacity: 0.85;
+			}
+		"))
+		),
+		
+		## continue shiny code-----
 		title = "Recommendations",
-		tags$style(type="text/css", "body {padding-top: 55px;}"),
 		fluidRow(
-
-			tags$style(type = "text/css", ".outer {position: fixed; top: 41px; left: 0; right: 0; bottom: 0; overflow: hidden; padding: 0}"),
-			
 			div(
 				class = "outer",
 				# leaflet map goes here
-				leafletOutput(outputId = "my_map", width = "100%", height = "100%"),
-				
+				leafletOutput(outputId = "map", width = "100%", height = "100%"),
 				# Input controls
 				absolutePanel(id = "controls", class = "panel panel-default", fixed = TRUE,
 							  draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
 							  width = 300, height = "90%",
+
 							  # 1. single dropdown list to select home country (keep static)
 							  h5("Select your ", span("home", style = "color:blue"), "country"),
 							  selectInput("home", label = NULL,
 							  			choices = country_list,
 							  			selected = "United States of America",
 							  			selectize = T),
+							  br(),
+							  
 							  # 2. multiple dropdown list to select countries visited
 							  h5("Select the countries you've", span("visited", style = "color:#25a31a")),
 							  selectInput("visited", label = NULL,
 							  			choices = country_list, 
 							  			multiple = T, selectize = T),
+							  br(),
 							  
 							  # 3. checkboxes for dimensions
 							  h5("Select what's important to you"),
@@ -96,6 +131,7 @@ shinyUI(navbarPage(
 							  				   choices = dimensions,
 							  				   selected = NULL
 							  ),
+							  br(),
 							  
 							  # 4. condition panel to choose economy dimension
 							  conditionalPanel(
