@@ -11,7 +11,7 @@ require(geojsonio); require(scales);
 
 ## this code only runs once and is available across sessions ---------------
 map_data <- geojson_read("data/countries.geojson", what = "sp")
-
+culture_dims <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
 
 # function that, given a dataset and a home country, calculates the Euclidean
 # distance between home and all other countries using all 6 cultural dimensions.
@@ -48,32 +48,26 @@ CEX <- function(X) {
 # by the user-selected dimensions. Returns back the input dataset with a
 # recommendation score appended.
 inputsCheck <- function(X, visited, home, dims){
-	# check that all dims are variables in X
 	char_dims <- unlist(dims) # coerce dims to vector
-	check <- char_dims %in% names(X)
-	extra_dims <- cbind(char_dims, check)
-	extra_dims <- extra_dims[char_dims == F]
-	
-	rdata <- X[ ,char_dims] #subset X to only include user-selected dimensions
-	
-	if (!is.null(nrow(extra_dims))) {
-		message <- paste("The following dimensions are not present in the dataset:\n",
-				   extra_dims[,1])
-		return(list(message = message, incompletes = NULL, data = NULL,
-					visited = NULL, valid_visited = NULL,
-					home = NULL, dims = NULL, rdata = NULL))
+	if (length(char_dims) == 1) {
+		rdata <- as.data.frame(X[ ,char_dims])
+		row.names(rdata) <- X$Country
+		names(rdata) <- eval(char_dims)
+		incompletes <- X[!complete.cases(X[ ,char_dims]), "Country"]
+	}
+	else {
+		rdata <- X[ ,char_dims] #subset X to only include user-selected dimensions
+		incompletes <- row.names(rdata[!complete.cases(rdata), ])
 	}
 	
 	# check that home country is valid
-	incompletes <- row.names(rdata[!complete.cases(rdata), ])
-	
 	if (home %in% incompletes) {
 		message <- paste(home, "has missing data for one or more of the dimensions",
 						 "you selected. Please select different dimensions or try",
 						 "a different home country.")
 		
-		return(list(message = message, incompletes = NULL, data = NULL,
-					visited = NULL, valid_visited = NULL,
+		return(list(type = "error", message = message, incompletes = NULL, data = NULL,
+					visited = NULL, valid_visited = NULL, invalid_visited = NULL,
 					home = NULL, dims = NULL, rdata = NULL))
 	}
 	
@@ -81,20 +75,22 @@ inputsCheck <- function(X, visited, home, dims){
 	# countries that are valid
 	valid_visited <- visited[!visited %in% incompletes]
 	invalid_visited <- visited[visited %in% incompletes]
-	# print(list(valid = valid_visited, invalid = invalid_visited))
 	
-	if (!is.null(invalid_visited)) {
+	if (length(invalid_visited)>0) {
 		# TO DO: list out individual invalid countries
-		message <- paste("The following countries that you have visited have",
+		message <- paste("The following countries that you've visited have",
 						 "missing data for one or more of the dimensions",
-						 "you selected:", invalid_visited)
-		return(list(message = message, incompletes = incompletes, data = X,
+						 "you selected. You can leave them in, but they will not",
+						 "contribute to your travel recommendations.",
+						 paste(invalid_visited, collapse = ", "))
+		return(list(type = "warning", message = message, incompletes = incompletes, data = X,
 					visited = visited, valid_visited = valid_visited, 
+					invalid_visited = invalid_visited,
 					home = home, dims = char_dims, rdata = rdata))
 	}
 	
-	return(list(message = NULL, incompletes = incompletes, data = X,
-				visited = visited, valid_visited = visited, 
+	return(list(type = NULL, message = NULL, incompletes = incompletes, data = X,
+				visited = visited, valid_visited = visited, invalid_visited = NULL,
 				home = home, dims = char_dims, rdata = rdata))
 	
 } 
@@ -110,11 +106,18 @@ recommend <- function(inputs) {
 		
 		missing_and_not_visited <- incompletes[!(incompletes %in% visited)]
 		current <- c(home, valid_visited) # vector for all visited countries
-		culture_dims <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
+		
 		
 		# remove Countries (rows) that don't have complete data for
 		# user-selected dimensions
-		rdata2 <- rdata[complete.cases(rdata),]
+		if (length(dims) == 1) {
+			rdata2 <- as.data.frame(rdata[complete.cases(rdata),])
+			labels <- X$Country
+			rows <- labels[!labels %in% incompletes]
+			row.names(rdata2) <- labels[!labels %in% incompletes]
+			names(rdata2) <- eval(dims)
+		}
+		else rdata2 <- rdata[complete.cases(rdata),]
 	
 		# weight the 6 culture dims collectively equally to each other dim
 		if (sum(culture_dims %in% dims) == 6) {
@@ -192,75 +195,94 @@ shinyServer(function(input, output, session) {
 		# assign country types according to user input
 		home <- input$home
 		visited <- input$visited
-
-		# assign dims according to user input
-		dims <- list(
-					 # "IDV", "IND", "LTO", "MAS", "PDI", "UAI",
-					 "CEXnorm"
-					 ,"urbanization"
-					 ,"gini"
-					 ,"densityNorm"
-					 )
 		
-		# check inputs
-		inputs <- inputsCheck(rawData, visited, home, dims)
-		message <- inputs$message
-		
-		# throw an error notification if the home country has missing data 
-		# for given inputs
-		if (!is.null(message)) {
-			return(showNotification(message, id = "home_error", duration = NULL, 
-									type = "error", closeButton = F))
+		# assign dimensions according to user input
+		dims <- input$dimensions
+		if ("culture" %in% dims) {
+			dims <- c(dims[!dims %in% "culture"], culture_dims)
+		}
+		if ("economy" %in% dims) {
+			dims <- c(dims[!dims %in% "economy"],input$economy_choice)
 		}
 		
-		# remove the notification when a valid home country is selected
-		removeNotification("home_error") 
-		
-		# calculate recommendation scores
-		countries <- recommend(inputs)
-		
-		# update country input lists
-		home_list <- sort(filter(countries, type != "visited")$Country)
-		updateSelectInput(session, "home", choices = home_list, selected = home)
-		# TO DO: figure out how to exclude home country from visited list without
-		# 		 re-rendering the visitor list after each selection
-		# updateSelectInput(session, "visited", choices = visited_list, selected = visited)
-
-		# set up country polygon colors
-		top3 <- head(arrange(countries, desc(score)), 3)$Country
-		rec_score <- countries$score
-		score_alpha <- rec_score/max(rec_score, na.rm = T)
-		
-		colors <- data.frame(Country = countries$Country, 
-							 fill = ifelse(countries$type == "missing", "grey",
-							 			  ifelse(countries$type == "home", "blue",
-						 			   	      ifelse(countries$type == "visited", "green",
-						 		 	   	   	     "red"))),
-							 line = ifelse(countries$type == "missing", "#eaeaea", 
-							 			  ifelse(countries$Country %in% top3, "orange",
-							 			  	   "#919191")),
-							 weight = ifelse(countries$Country %in% top3, 4, 1),
-							 alpha = ifelse(countries$type == "missing", 0,
-							 			   ifelse(countries$type == "home", .6,
-							 			   	   ifelse(countries$type == "visited", .6,
-							 			   	   	   score_alpha)))
-							 )
-		
-		# update polygons according to recommendation scores
-		leafletProxy("my_map", data = map_data) %>%
-			clearShapes() %>%
-			addPolygons(smoothFactor = 0.5,
-						# fill the polygon
-						fillOpacity = colors$alpha, fillColor = colors$fill,
-						# render the lines
-						stroke = TRUE, opacity = 1, color = colors$line, weight = colors$weight,
-						highlightOptions = highlightOptions(color = "white", weight = 2,
-															bringToFront = TRUE))
-		
-		##TEMPORARY: print the list of countries and recommend scores as a simple table
-		output$recs <- renderTable({
-			result <- countries %>% select(Country, score) %>% arrange(desc(score))
-		})
+		if (!is.null(dims)) {
+			# check inputs
+			inputs <- inputsCheck(rawData, visited, home, dims)
+			message <- inputs$message
+			invalid_visited <- inputs$invalid_visited
+			message_type <- inputs$type
+			
+			# bring up a warning if visited countries have missing data
+			# for given inputs
+			if (is.null(message_type)) {
+				removeNotification("visited_warning")
+			}
+			else if (message_type == "warning"){
+				showNotification(
+					ui = message,
+					duration = 5,
+					type = message_type,
+					id = "visited_warning"
+				)
+			}
+			
+			# throw an error modal if the home country has missing data 
+			# for given inputs
+			else if (message_type == "error") {
+				return(showModal(modalDialog(
+					title = "Missing Data",
+					message,
+					easyClose = T,
+					footer = NULL
+				)))
+			}
+	
+			# calculate recommendation scores
+			countries <- recommend(inputs)
+			
+			# update country input lists
+			home_list <- sort(filter(countries, type != "visited")$Country)
+			updateSelectInput(session, "home", choices = home_list, selected = home)
+			# TO DO: figure out how to exclude home country from visited list without
+			# 		 re-rendering the visitor list after each selection
+			# updateSelectInput(session, "visited", choices = visited_list, selected = visited)
+	
+			# set up country polygon colors
+			top3 <- head(arrange(countries, desc(score)), 3)$Country
+			rec_score <- countries$score
+			score_alpha <- rec_score/max(rec_score, na.rm = T)
+			
+			colors <- data.frame(Country = countries$Country, 
+								 fill = ifelse(countries$type == "missing", "grey",
+								 			  ifelse(countries$type == "home", "blue",
+							 			   	      ifelse(countries$type == "visited", "green",
+							 		 	   	   	     "red"))),
+								 line = ifelse(countries$type == "missing", "#eaeaea", 
+								 			  ifelse(countries$Country %in% top3, "orange",
+								 			  	   "#919191")),
+								 weight = ifelse(countries$Country %in% top3, 4, 1),
+								 alpha = ifelse(countries$type == "missing", 0,
+								 			   ifelse(countries$type == "home", .6,
+								 			   	   ifelse(countries$type == "visited", .6,
+								 			   	   	   score_alpha)))
+								 )
+			
+			# update polygons according to recommendation scores
+			leafletProxy("my_map", data = map_data) %>%
+				clearShapes() %>%
+				addPolygons(smoothFactor = 0.5,
+							# fill the polygon
+							fillOpacity = colors$alpha, fillColor = colors$fill,
+							# render the lines
+							stroke = TRUE, opacity = 1, color = colors$line, weight = colors$weight,
+							highlightOptions = highlightOptions(color = "white", weight = 2,
+																bringToFront = TRUE))
+			
+			##TEMPORARY: print the list of countries and recommend scores as a simple table
+			output$recs <- renderTable({
+				result <- countries %>% select(Country, score) %>% arrange(desc(score))
+			})
+		}
 	})
 	
 	## return to later --------

@@ -6,6 +6,14 @@ library(shiny); require(leaflet); library(shinythemes)
 
 country_list <- sort(rawData[,1])
 
+dimensions <- c("Culture" = "culture",
+				 "Economy" = "economy",
+				 "Urbanization" = "urbanization",
+				 "Income Inequality" = "gini",
+				 "Population Density" = "densityNorm")
+
+econ_dimensions <- c("Consumption Expenditure per capita" = "CEXnorm",
+					 "GDP per capita" = "GDPnorm")
 
 # Define UI
 shinyUI(navbarPage(
@@ -81,15 +89,25 @@ shinyUI(navbarPage(
 							  			choices = country_list, 
 							  			multiple = T, selectize = T),
 							  
-							  # 4. single dropdown list to select y-axis variable
-							  h5("Select a country wealth metric (per capita)**"),
-							  selectInput("Ymethod", label = NULL, 
-							  			choices = list("Household Consumption (CEX)", "GDP"),
-							  			selected = "Household Consumption (CEX)",
-							  			multiple = F, selectize = F)
+							  # 3. checkboxes for dimensions
+							  h5("Select what's important to you"),
+							  checkboxGroupInput("dimensions",
+							  				   label = NULL,
+							  				   choices = dimensions,
+							  				   selected = NULL
+							  ),
+							  
+							  # 4. condition panel to choose economy dimension
+							  conditionalPanel(
+							  	condition = "input.dimensions.includes('economy')",
+							  	h5("Select the economy dimension you want"),
+							  	radioButtons("economy_choice", label = NULL,
+							  				choices = econ_dimensions,
+							  				selected = econ_dimensions[1])
+							  )
 				)
 			)
-			)
+		)
 
 	),
 	
