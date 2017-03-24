@@ -110,33 +110,33 @@ shinyUI(navbarPage(
 							  width = 300, height = "90%",
 
 							  # 1. single dropdown list to select home country (keep static)
-							  h5("Select your ", span("home", style = "color:blue"), "country"),
+							  h4("Countries"),
+							  h5("Where do you call", span("home", style = "color:blue"), "?"),
 							  selectInput("home", label = NULL,
 							  			choices = country_list,
 							  			selected = "United States of America",
 							  			selectize = T),
-							  br(),
 							  
 							  # 2. multiple dropdown list to select countries visited
-							  h5("Select the countries you've", span("visited", style = "color:#25a31a")),
+							  h5("Where have you", span("visited", style = "color:#25a31a"), "?"),
 							  selectInput("visited", label = NULL,
 							  			choices = country_list, 
 							  			multiple = T, selectize = T),
 							  br(),
 							  
+							  h4("Dimensions"),
 							  # 3. checkboxes for dimensions
-							  h5("Select what's important to you"),
+							  h5("How do you want to diversify your travel?"),
 							  checkboxGroupInput("dimensions",
 							  				   label = NULL,
 							  				   choices = dimensions,
 							  				   selected = NULL
 							  ),
-							  br(),
 							  
 							  # 4. condition panel to choose economy dimension
 							  conditionalPanel(
 							  	condition = "input.dimensions.includes('economy')",
-							  	h5("Select the economy dimension you want"),
+							  	h5("Pick an economic dimension"),
 							  	radioButtons("economy_choice", label = NULL,
 							  				choices = econ_dimensions,
 							  				selected = econ_dimensions[1])

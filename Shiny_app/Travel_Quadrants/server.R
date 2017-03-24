@@ -272,7 +272,7 @@ shinyServer(function(input, output, session) {
 						stroke = TRUE, opacity = 1, color = colors$line, weight = colors$weight,
 						# highlight if hovered over
 						highlightOptions = highlightOptions(color = "white", weight = 2,
-															bringToFront = TRUE)
+															bringToFront = TRUE) 
 						)
 		
 		##TEMPORARY: print the list of countries and recommend scores as a simple table
