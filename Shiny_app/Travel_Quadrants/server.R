@@ -2,299 +2,321 @@
 # Server logic for "Where Should I Travel Next?" shiny application
 #
 
+library(shiny); require(dplyr); require(leaflet); require(jsonlite)
+require(geojsonio); require(scales);
 
-library(shiny); require(dplyr); require(ggplot2); require(scales); 
-require(reshape2); require(fmsb); require(ggrepel)
+## this code only runs once and is available across sessions ---------------
+map_data <- geojson_read("data/countries.geojson", what = "sp")
+culture_dims <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
+culture_data <- rawData[, culture_dims]
 
-## this code only runs once, when app is published ---------------
-rawData <- readRDS("data/country_data.rds")
-
-# function that, given a dataset and a home country, calculates CDI 
-# and returns a new dataset with CDI appended
-CDI <- function(X, home_country) {
-	cdi_matrix <- as.matrix(select(X, IDV, IND, LTO, MAS, PDI, UAI))
-	home_vector <- as.numeric(subset(cdi_matrix, 
-									 row.names(cdi_matrix) == home_country))
+# calculate the normalized cultural distance between a given country and home
+edist <- function(X, home, country) {
+	# calculate distances from home
+	distE <- as.matrix(dist(X, method = "euclidean"))[,home]
 	
-	diffs <- abs(sweep(cdi_matrix, 2, home_vector))
-	diff_sums <- apply(diffs, 1, sum)
-	anti_home <- ifelse(home_vector < 50, 100, 0)
-	anti_diff <- sum(abs(home_vector - anti_home))
-	CD_norm <- 100*(diff_sums/anti_diff)
-	
-	df <- cbind(X, CD_norm)
-	df
-}
-
-# function that, given a dataset and a home country, calculates the Euclidean
-# distance between home and all other countries using all 6 cultural dimensions.
-# returns a new dataset with normalized edist appended
-edist <- function(X, home_country) {
-	ed_df <- select(rawData, IDV, IND, LTO, MAS, PDI, UAI)
-	
-	distE <- as.matrix(dist(ed_df, method = "euclidean"))[,home_country]
-	home_df <- ed_df[row.names(ed_df) == home_country,]
+	# calculate the max distance from home (normalization denomimator)
+	home_df <- X[row.names(X) == home,]
 	anti_home <- ifelse(home_df < 50, 100, 0)
 	anti_matrix <- matrix(c(home_df, anti_home), nrow = 2, ncol = 6, byrow = T)
 	anti_dist <- dist(anti_matrix)[1]
+	
+	# normalize
 	CD_norm <- 100*(distE/anti_dist)
 	
-	df <- cbind(X, CD_norm)
-	df
+	# find the normalized distance for given country
+	CD_norm[names(CD_norm) == country]
 }
 
-# function that returns a dataset with GDPPC as the Y variables
-GDP <- function(X) {
-	GDP_df <- X %>% select(-CEXPC, -CEXPC_norm) %>%
-		rename(y_var_raw = GDPPC, y_var_norm = GDPPC_norm)
-}
-
-# function that returns a dataset with CEXPC as the Y variables
-CEX <- function(X) {
-	GDP_df <- X %>% select(-GDPPC, -GDPPC_norm) %>%
-		rename(y_var_raw = CEXPC, y_var_norm = CEXPC_norm)
-}
-
-
-# set up styles for dimensions radar chart
-colors_border <- c(alpha("blue", .9),
-				   alpha("#ffba38", .9))
-colors_in <- c(alpha("blue", .4),
-			   alpha("#ffba38", .4))
-
-## code inside this unnamed function runs each session ------------
-shinyServer(function(input, output) {
-	# process selected countries
-	home <- reactive({input$home})
-	visited <- reactive({input$visited})
-
+# ***Recommendation Engine***
+# Generate recommendations based on min euclidean distance between
+# new countries and each visited country, within the N-dimensional space defined
+# by the user-selected dimensions. Returns back the input dataset with a
+# recommendation score appended.
+# First, check the inputs
+inputsCheck <- function(X, visited, home, dims){
+	char_dims <- unlist(dims) # coerce dims to vector
+	if (length(char_dims) == 1) {
+		rdata <- as.data.frame(X[ ,char_dims])
+		row.names(rdata) <- X$Country
+		names(rdata) <- eval(char_dims)
+		incompletes <- X[!complete.cases(X[ ,char_dims]), "Country"]
+	}
+	else {
+		rdata <- X[ ,char_dims] #subset X to only include user-selected dimensions
+		incompletes <- row.names(rdata[!complete.cases(rdata), ])
+	}
 	
-	# interactive selection of cultural difference method
-	Xmethod <- reactive({
-		if (input$Xmethod == "Cultural Difference Index") {CDI}
-		else edist
-	})
-	
-	# interactive selection of wealth metric
-	Ymethod <- reactive({
-		if (input$Ymethod == "GDP") {GDP}
-		else CEX
-	})
-	
-	# function that, given a dataset with a cultural diff variable and input
-	# country vectors, returns a vector of recommended travel destinations determined
-	# by the largest Euclidean distance from home and all visited countries.
-	recommend <- function(X, visited, home) {
+	# check that home country is valid
+	if (home %in% incompletes) {
+		message <- paste(home, "has missing data for one or more of the dimensions",
+						 "you selected. Please select different dimensions or try",
+						 "a different home country.")
 		
-		# 1. subset the dataset to include only the culture dims and the wealth norm metric
-		# 
-		rdata <- X %>% select(IDV, IND, LTO, MAS, PDI, UAI, y_var_norm) %>% 
-					   mutate(y_var_norm = sqrt(6)*y_var_norm) # putting wealth metric on equal footing
-		rownames(rdata) <- X$Country
-			
-		# 2. generate a distance matrix for all countries
-		rdist <- as.data.frame(as.matrix(dist(rdata)))
+		return(list(type = "error", message = message, incompletes = NULL, data = NULL,
+					visited = NULL, valid_visited = NULL, invalid_visited = NULL,
+					home = NULL, dims = NULL, rdata = NULL))
+	}
+	
+	# check that visited countries are valid. If not, return only visited
+	# countries that are valid
+	valid_visited <- visited[!visited %in% incompletes]
+	invalid_visited <- visited[visited %in% incompletes]
+	
+	if (length(invalid_visited)>0) {
+		# TO DO: list out individual invalid countries
+		message <- paste("The following countries that you've visited have",
+						 "missing data for one or more of the dimensions",
+						 "you selected. You can leave them in, but they will not",
+						 "contribute to your travel recommendations.",
+						 paste(invalid_visited, collapse = ", "))
+		return(list(type = "warning", message = message, incompletes = incompletes, data = X,
+					visited = visited, valid_visited = valid_visited, 
+					invalid_visited = invalid_visited,
+					home = home, dims = char_dims, rdata = rdata))
+	}
+	
+	return(list(type = NULL, message = NULL, incompletes = incompletes, data = X,
+				visited = visited, valid_visited = visited, invalid_visited = NULL,
+				home = home, dims = char_dims, rdata = rdata))
+	
+} 
 
-		current <- c(home, visited)
+# Second, calculate the recommendation score
+recommend <- function(inputs) {
+		home <- inputs$home
+		visited <- inputs$visited
+		valid_visited <- inputs$valid_visited
+		X <- inputs$data
+		rdata <- inputs$rdata
+		incompletes <- inputs$incompletes
+		dims <- inputs$dims
+		
+		missing_and_not_visited <- incompletes[!(incompletes %in% visited)]
+		current <- c(home, valid_visited) # vector for all visited countries
+		
+		
+		# remove Countries (rows) that don't have complete data for
+		# user-selected dimensions
+		if (length(dims) == 1) {
+			rdata2 <- as.data.frame(rdata[complete.cases(rdata),])
+			labels <- X$Country
+			rows <- labels[!labels %in% incompletes]
+			row.names(rdata2) <- labels[!labels %in% incompletes]
+			names(rdata2) <- eval(dims)
+		}
+		else rdata2 <- rdata[complete.cases(rdata),]
+	
+		# weight the 6 culture dims collectively equally to each other dim
+		if (sum(culture_dims %in% dims) == 6) {
+			for(i in culture_dims) {
+				rdata2[, i] <- rdata2[, i]/sqrt(6)
+			}
+		}
+		
+		# 2. generate a distance matrix for all countries
+		rdist <- as.data.frame(as.matrix(suppressWarnings(dist(rdata2))))
 		
 		# 3. subset the distance matrix for only the rows corresponding to visited
-		# 	 and home countries and columns corresponding to all other countries
+		# and home countries...
 		r_df <- rdist %>% filter(row.names(rdist) %in% current)
+		# ...and columns corresponding to all other countries
 		r_df2 <- r_df[, -which(names(r_df) %in% current)]
 		
-		# 4. summarize (mean, min, median, other?) by column.
-		r_means <- summarize_each(r_df2, funs(min)) # POTENTIALLY add UI control????
+		# 4. summarize by column according to min - POTENTIALLY CHANGE THIS
+		r_means <- summarize_each(r_df2, funs(min))
 		
-		# 5. The 3 columns with the largest resulting values are the recommended countries
-		recs <- names(head(sort(unlist(r_means), decreasing = T),3))
-	}
-	
-	# function that, given a dataset and input + recommended country vectors, 
-	# returns a vector denoting country types
-	my_countries <- function(X, visited, home, recommended) {
-		temp <- data.frame("country" = X$Country,
-						   "type" = vector(mode = "character", length = nrow(X)))
-		ifelse(temp$country %in% home, temp$type <- "home",
-			   ifelse(temp$country %in% recommended, temp$type <- "recommended",
-			   	   ifelse(temp$country %in% visited, temp$type <- "visited",
-			   	   	   temp$type <- "other")))
-	}
-	
-	# interactive calculation of CD and production of new dataset
-	dataCD <- reactive({Xmethod()(rawData,home())})
-	
-	# interactive selection of Y variable
-	dataY <- reactive({Ymethod()(dataCD())})
-	
-	recommended <- reactive({
-		recommend(dataY(), visited(), home())
-	})
-	
-	point_styles <- reactive ({
-		my_countries(dataY(), visited(), home(), recommended())
-	})
-	
-	# interactive addition of country type variable to dataset
-	plotdata <- reactive({
-		mutate(dataY(), my_countries = as.factor(point_styles()))
-	})
-	
-	# render the scatterplot
-	Xmethod_label <- reactive({
-		if(input$Xmethod == "Cultural Difference Index") "Index"
-		else "Euclidean Distance"
-	})
-	
-	y_axis <- reactive({
-		if(input$Ymethod == "GDP") {
-			list(name = y_label(),
-				 breaks = c(0, 25000, 50000, 75000, 100000),
-				 labels = c("$0", "$25k", "$50k", "$75k", "$100k"),
-				 limits = c(0, 105000))
+		# 5. return the dataframe with recommendation score, type, and display color
+		# variables appended
+		new <- data.frame(Country = names(r_means), score = unlist(r_means),
+						  type = "new", stringsAsFactors = F)
+		
+		h <- data.frame(Country = home, score = NA, type = "home", stringsAsFactors = F)
+		
+		if (length(visited) == 0) {v <- data.frame(Country = NA, score = NA,
+												   type = NA)
+		}
+		else {v <- data.frame(Country = visited,
+							  score = NA,
+							  type = "visited", 
+							  stringsAsFactors = F)
+		}
+		
+		if (length(missing_and_not_visited ) == 0) {missing <- data.frame(Country = NA, score = NA,
+															 type = "missing")
+		
 		}
 		else {
-			list(name = y_label(),
-				 breaks = c(0, 10000, 20000, 30000, 40000),
-				 labels = c("$0", "$10k", "$20k", "$30k", "$40k"),
-				 limits = c(0, 40000))
+			missing <- data.frame(Country = missing_and_not_visited,
+								  score = NA,
+								  type = "missing",
+								  stringsAsFactors = F)
 		}
-	})
-	
-	x_label <- reactive ({
-		paste0("Cultural Difference from ", home(), " (", Xmethod_label(), ")")
-	})
-	
-	y_label <- reactive({
-		if(input$Ymethod == "GDP") "GDP per capita"
-		else "HH Consumption Expenditure per capita"
-	})
-	
-	
-	point_labels <- reactive({
-			a <- as.character(plotdata()$Country)
-			replace(a, !(a %in% recommended()), "")
-	})
-	
-	output$plot <- renderPlot({
-		g <- ggplot(plotdata(), aes(x = CD_norm, y = y_var_raw, alpha = my_countries,
-							   color = my_countries, size = my_countries)) +
-			theme_classic() +
-			geom_point() +
-			scale_color_manual(values = c("visited" = "#25a31a", 
-										  "other" = "black",
-										  "home" = "blue",
-										  "recommended" = "red")) +
-			# figure out how to layer the colors over the grey
-			scale_alpha_manual(values = c("visited" = 1,
-										  "other" = .3, "home" = 1,
-										  "recommended" = 1)) +
-			scale_size_manual(values = c("visited" = 5, 
-										 "other" = 5,
-										 "home" = 5,
-										 "recommended" = 6)) +
-			scale_x_continuous(x_label(),
-							   breaks = c(0, 25, 50, 75),
-							   labels = c(home(), "25", "50", "75"),
-							   limits = c(0, 75)) +
-			do.call(scale_y_continuous, y_axis()) +
-			theme(text = element_text(family = "sans", size = 16, color = "#3C3C3C"),
-				  plot.title = element_text(size = 16, face = "bold"),
-				  plot.caption = element_text(face = "italic", size = 10),
-				  axis.title = element_text(face = "bold"),
-				  plot.margin = unit(c(0, 1.7, 0, 0), "cm")) +
-			guides(color = "none", alpha = "none", size = "none")
-		g
 		
-		if (req(!is.null(point_labels))) {
-			g + geom_text_repel(label = point_labels(), size = 4.5, color = "#727272",
-								segment.color = NA, point.padding = unit(4, "pt"), nudge_y = .15)
-		}
-	})
-	
-	# reactive y_var label for the tooltip
-	y_tooltip <- reactive({
-		if(input$Ymethod == "GDP") "GDP"
-		else "CEX"
-	})
-	
-	# render the hover tooltip
-	output$hover_info <- renderUI({
-		hover <- input$plot_hover
-		point <- nearPoints(plotdata(), hover, xvar = "CD_norm",
-							yvar = "y_var_raw", maxpoints = 1, addDist = T)
-		if (nrow(point) == 0) return(NULL)
-			# the following code borrowed from Pawel via, https://gitlab.com/snippets/16220
-			# calculate point position INSIDE the image as percent of total dimensions
-			# from left (horizontal) and from top (vertical)
-			left_pct <- (hover$x - hover$domain$left) / (hover$domain$right - hover$domain$left)
-			top_pct <- (hover$domain$top - hover$y) / (hover$domain$top - hover$domain$bottom)
-			
-			# calculate distance from left and bottom side of the picture in pixels
-			left_px <- hover$range$left + left_pct * (hover$range$right - hover$range$left)
-			top_px <- hover$range$top + top_pct * (hover$range$bottom - hover$range$top)
-			
-			# create style property for tooltip
-			# background color is set so tooltip is a bit transparent
-			# z-index is set so we are sure are tooltip will be on top
-			style <- paste0("position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
-							"left:", left_px + 2, "px; top:", 
-							top_px + 2, "px; padding: 5px;")
-			
-			wellPanel(
-				style = style,
-				HTML(paste0("<b>",as.character(point$Country),"</b>"), "<br/>",
-					 paste0("<b>",y_tooltip(),": </b>"), dollar_format()(point$y_var_raw), "<br/>",
-					 "<b>Culture Diff: </b>", round(point$CD_norm,0), "<br/>"
-					 )
-			)
-	})
-	
-	# the click
-	click <- reactive({input$plot_click})
-	
-	# data for the clicked country
-	point <- reactive({
-		nearPoints(plotdata(), click(), xvar = "CD_norm",
-				   yvar = "y_var_raw", maxpoints = 1)
-	})
-	
-	# render the cultural dimensions radar chart
-	# HOW BIG SHOULD THIS CHART BE?
-	output$click_plot <- renderPlot({
-		point_home <- rbind(filter(plotdata(), Country == home()), point())
-		
-		radar_data <- rbind(rep(100, 6), rep(0, 6), 
-							select(point_home, IDV, IND, LTO, MAS, PDI, UAI))
-		
-		c_names <- c(home(), as.character(point()$Country))
+		vars <- rbind(h, new, missing, v)
+		result_df <- left_join(X, vars, by = "Country")
+	}
 
-		if (req(!is.null(click))) {
-			par(mar = c(0,0,0,0))
-			radarchart(radar_data, axistype = 1, pty = 16, 
-					   pcol = colors_border, plwd = 2, plty = 1, pfcol = colors_in,
-					   cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,100,25), 
-					   cglwd=0.8, vlcex=1)
+## code inside this unnamed function runs each session
+shinyServer(function(input, output, session) {
+	
+	# render the initial map
+	output$map <- renderLeaflet({
+		leaflet() %>%
+			addProviderTiles("CartoDB.Positron") %>%
+			setView(lng = 60, lat = 37.45, zoom = 2)
+	})
+
+	# assign country types according to user input
+	home <- reactive({input$home})
+	visited <- reactive({input$visited})
+	# assign dimensions according to user input
+	dims <- reactive({
+		dims <- input$dimensions
+		if ("culture" %in% dims) {
+			dims <- c(dims[!dims %in% "culture"], culture_dims)
+		}
+		if ("economy" %in% dims) {
+			dims <- c(dims[!dims %in% "economy"],input$economy_choice)
+		}
+		dims
+	})
+	
+	
+	# generate country recommendations based on user input
+	countries <- reactive({
+		if (!is.null(dims())) {
+			# check inputs
+			inputs <- inputsCheck(rawData, visited(), home(), dims())
+			message <- inputs$message
+
+			invalid_visited <- inputs$invalid_visited
+			message_type <- inputs$type
 			
-			legend(x=0.4, y=1.2, legend = c_names, bty = "n", pch=20, 
-				   col=colors_border , text.col = "black", cex=1, pt.cex=3)
+			# throw a warning if visited countries have missing data
+			# for given inputs
+			if (is.null(message_type)) {
+				removeNotification("visited_warning")
+			}
+			else if (message_type == "warning"){
+				showNotification(
+					ui = message,
+					duration = 5,
+					type = message_type,
+					id = "visited_warning"
+				)
+			}
+			
+			# throw an error modal if the home country has missing data 
+			# for given inputs
+			else if (message_type == "error") {
+				return(showModal(modalDialog(
+					title = "Missing Data",
+					message,
+					easyClose = T,
+					footer = NULL
+				)))
+			}
+	
+			# calculate recommendation scores
+			countries <- recommend(inputs)
 		}
 	})
 	
-	# render the wikipedia URL
-	output$click_url <- renderUI ({
-		if (req(!is.null(click()))) {
-			country_name <- point()$Country
-			if (length(country_name) == 0) {
-				HTML(" ")
+	
+	# apply country formatting according to recommendations
+	observe ({
+		if(!is.null(countries())) {
+		# update country input lists
+		home_list <- sort(filter(countries(), type != "visited")$Country)
+		updateSelectInput(session, "home", choices = home_list, selected = home())
+		# TO DO: figure out how to exclude home country from visited list without
+		# 		 re-rendering the visitor list after each selection
+		# updateSelectInput(session, "visited", choices = visited_list, selected = visited)
+
+		# set up country polygon colors
+		top3 <- head(arrange(countries(), desc(score)), 3)$Country
+		rec_score <- countries()$score
+		score_alpha <- rec_score/max(rec_score, na.rm = T)
+		
+		colors <- data.frame(Country = countries()$Country, 
+							 fill = ifelse(countries()$type == "missing", "grey",
+							 			  ifelse(countries()$type == "home", "blue",
+						 			   	      ifelse(countries()$type == "visited", "green",
+						 		 	   	   	     "red"))),
+							 line = ifelse(countries()$type == "missing", "#eaeaea", 
+							 			  ifelse(countries()$Country %in% top3, "orange",
+							 			  	   "#919191")),
+							 weight = ifelse(countries()$Country %in% top3, 4, 1),
+							 alpha = ifelse(countries()$type == "missing", 0,
+							 			   ifelse(countries()$type == "home", .6,
+							 			   	   ifelse(countries()$type == "visited", .6,
+							 			   	   	   score_alpha)))
+							 )
+		
+		# update polygons according to recommendation scores
+		leafletProxy("map", data = map_data) %>%
+			clearShapes() %>%
+			addPolygons(layerId = map_data$subunit, smoothFactor = 0.5,
+						# fill the polygon
+						fillOpacity = colors$alpha, fillColor = colors$fill,
+						# render the lines
+						stroke = TRUE, opacity = 1, color = colors$line, weight = colors$weight,
+						# highlight if hovered over
+						highlightOptions = highlightOptions(color = "white", weight = 2,
+															bringToFront = TRUE) 
+						)
+		
+		##TEMPORARY: print the list of countries and recommend scores as a simple table
+		# output$recs <- renderTable({
+		# 	result <- countries() %>% select(Country, score) %>% arrange(desc(score))
+		# 	})
+		}
+	})
+	
+	# Show a popup at the given country
+	observe({
+		showCountryPopup <- function(country, lat, lng) {
+			selectedCountry <- countries()[countries()$Country == country,]
+			
+			# show home/visited status or rec score
+			if (country %in% home()) {
+					status <- sprintf("Status: home country")
+				}
+			else if (country %in% visited()) {
+				status <- sprintf("Status: visited")
 			}
-			else {
-			country_url <- gsub(" ", "_", country_name)
-			p(align = "right", HTML(paste0("Read more about ", country_name, " on <a href= 'https://en.wikipedia.org/wiki/", 
-						country_url, "'> Wikipedia </a>")))
+			else status <- sprintf("Recommendation Score: %.0f", round(selectedCountry$score),1)
+			
+			# show cultural distance from home country, if not home country
+			if(!country %in% home()) {
+				dist <- edist(culture_data, home(), country)
+				distance <- sprintf("Cultural distance from %s: %.0f", home(), dist)
 			}
+			else distance <- NULL
+
+			content <- as.character(tagList(
+				tags$h4(country),
+				tags$strong(HTML(status)), tags$br(),
+				distance, tags$br(),
+				sprintf("Consumption Expenditure per capita: %s", dollar_format()(selectedCountry$CEX)), tags$br(),
+				sprintf("GDP per capita: %s", dollar_format()(selectedCountry$GDP)), tags$br(),
+				sprintf("Urbanization: %.1f%%", selectedCountry$urbanization), tags$br(),
+				sprintf("Income Inequality (Gini coefficent): %.1f%%", selectedCountry$gini), tags$br(),
+				sprintf("Population Density: %.0f people per km^2", selectedCountry$pop_density)
+			))
+			leafletProxy("map") %>% 
+				addPopups(lng, lat, content, layerId = "popup",
+						  options = popupOptions(closeOnClick = T))
 		}
 		
+		# When map is clicked, show a popup with country info
+		leafletProxy("map") %>% clearPopups()
+		event <- input$map_shape_click
+		if (is.null(event))
+			return()
+		isolate({
+			showCountryPopup(event$id, event$lat, event$lng)
+		})
 	})
-	
-	
 })
