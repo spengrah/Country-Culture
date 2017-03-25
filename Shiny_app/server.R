@@ -1,5 +1,5 @@
 #
-# Server logic for "Where Should I Travel Next?" shiny application
+# Server logic for "Baseball Stadium Explorer" shiny application
 #
 
 library(shiny); require(dplyr); require(leaflet); require(jsonlite)
@@ -7,10 +7,8 @@ require(geojsonio); require(scales);
 
 ## this code only runs once and is available across sessions ---------------
 map_data <- geojson_read("data/countries.geojson", what = "sp")
-culture_dims <- c("IDV", "IND", "LTO", "MAS", "PDI", "UAI")
-culture_data <- rawData[, culture_dims]
 
-# calculate the normalized cultural distance between a given country and home
+# calculate the normalized distance between a given country and home
 edist <- function(X, home, country) {
 	# calculate distances from home
 	distE <- as.matrix(dist(X, method = "euclidean"))[,home]
@@ -164,7 +162,7 @@ shinyServer(function(input, output, session) {
 	output$map <- renderLeaflet({
 		leaflet() %>%
 			addProviderTiles("CartoDB.Positron") %>%
-			setView(lng = 60, lat = 37.45, zoom = 2)
+			setView(lng = -95, lat = 38, zoom = 5)
 	})
 
 	# assign country types according to user input
