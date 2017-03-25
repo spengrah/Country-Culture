@@ -2,12 +2,8 @@
 # Server logic for "Where Should I Travel Next?" shiny application
 #
 
-
 library(shiny); require(dplyr); require(leaflet); require(jsonlite)
 require(geojsonio); require(scales);
-# require(tidyr)
-# require(fmsb)
-# require(ggplot2)
 
 ## this code only runs once and is available across sessions ---------------
 map_data <- geojson_read("data/countries.geojson", what = "sp")
@@ -33,10 +29,11 @@ edist <- function(X, home, country) {
 }
 
 # ***Recommendation Engine***
-# Function to generate recommendations based on min euclidean distance between
-# new countries and each visited country, within the N-dimensional space created
+# Generate recommendations based on min euclidean distance between
+# new countries and each visited country, within the N-dimensional space defined
 # by the user-selected dimensions. Returns back the input dataset with a
 # recommendation score appended.
+# First, check the inputs
 inputsCheck <- function(X, visited, home, dims){
 	char_dims <- unlist(dims) # coerce dims to vector
 	if (length(char_dims) == 1) {
@@ -85,6 +82,7 @@ inputsCheck <- function(X, visited, home, dims){
 	
 } 
 
+# Second, calculate the recommendation score
 recommend <- function(inputs) {
 		home <- inputs$home
 		visited <- inputs$visited
@@ -158,12 +156,6 @@ recommend <- function(inputs) {
 		vars <- rbind(h, new, missing, v)
 		result_df <- left_join(X, vars, by = "Country")
 	}
-
-# set up styles for dimensions radar chart
-# colors_border <- c(alpha("blue", .9),
-# 				   alpha("#ffba38", .9))
-# colors_in <- c(alpha("blue", .4),
-# 			   alpha("#ffba38", .4))
 
 ## code inside this unnamed function runs each session
 shinyServer(function(input, output, session) {
@@ -276,9 +268,9 @@ shinyServer(function(input, output, session) {
 						)
 		
 		##TEMPORARY: print the list of countries and recommend scores as a simple table
-		output$recs <- renderTable({
-			result <- countries() %>% select(Country, score) %>% arrange(desc(score))
-			})
+		# output$recs <- renderTable({
+		# 	result <- countries() %>% select(Country, score) %>% arrange(desc(score))
+		# 	})
 		}
 	})
 	
@@ -327,43 +319,4 @@ shinyServer(function(input, output, session) {
 			showCountryPopup(event$id, event$lat, event$lng)
 		})
 	})
-	
-	## return to later --------
-	# # render the cultural dimensions radar chart
-	# output$click_plot <- renderPlot({
-	# 	point_home <- rbind(filter(plotdata(), Country == home()), point())
-	# 	
-	# 	radar_data <- rbind(rep(100, 6), rep(0, 6), 
-	# 						select(point_home, IDV, IND, LTO, MAS, PDI, UAI))
-	# 	
-	# 	c_names <- c(home(), as.character(point()$Country))
-	# 
-	# 	if (req(!is.null(click))) {
-	# 		par(mar = c(0,0,0,0))
-	# 		radarchart(radar_data, axistype = 1, pty = 16, 
-	# 				   pcol = colors_border, plwd = 2, plty = 1, pfcol = colors_in,
-	# 				   cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,100,25), 
-	# 				   cglwd=0.8, vlcex=1)
-	# 		
-	# 		legend(x=0.4, y=1.2, legend = c_names, bty = "n", pch=20, 
-	# 			   col=colors_border , text.col = "black", cex=1, pt.cex=3)
-	# 	}
-	# })
-	
-	# # render the wikipedia URL
-	# output$click_url <- renderUI ({
-	# 	if (req(!is.null(click()))) {
-	# 		country_name <- point()$Country
-	# 		if (length(country_name) == 0) {
-	# 			HTML(" ")
-	# 		}
-	# 		else {
-	# 		country_url <- gsub(" ", "_", country_name)
-	# 		p(align = "right", HTML(paste0("Read more about ", country_name, " on <a href= 'https://en.wikipedia.org/wiki/", 
-	# 					country_url, "'> Wikipedia </a>")))
-	# 		}
-	# 	}
-	# 	
-	# })
-	
 })
