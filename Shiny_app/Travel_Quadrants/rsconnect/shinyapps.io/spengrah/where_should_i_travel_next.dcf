@@ -3,9 +3,9 @@ title: Where Should I Travel Next?
 account: spengrah
 server: shinyapps.io
 appId: 166945
-bundleId: 762473
+bundleId: 774061
 url: https://spengrah.shinyapps.io/where_should_i_travel_next/
-when: 1490401771.1926
+when: 1491162795.50628
 asMultiple: FALSE
 asStatic: FALSE
 ignoredFiles: data/country_data.rds

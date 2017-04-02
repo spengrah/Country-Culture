@@ -10,7 +10,7 @@ dimensions <- c("Culture" = "culture",
 				 "Economy" = "economy",
 				 "Urbanization" = "urbanization",
 				 "Income Inequality" = "gini",
-				 "Population Density" = "densityNorm")
+				 "Population Density" = "densityLogNorm")
 
 econ_dimensions <- c("Consumption Expenditure per capita" = "CEXnorm",
 					 "GDP per capita" = "GDPnorm")

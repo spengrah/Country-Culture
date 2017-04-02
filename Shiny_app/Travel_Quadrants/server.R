@@ -207,7 +207,7 @@ shinyServer(function(input, output, session) {
 				)
 			}
 			
-			# throw an error modal if the home country has missing data 
+			# bring up an error modal if the home country has missing data 
 			# for given inputs
 			else if (message_type == "error") {
 				return(showModal(modalDialog(
@@ -264,8 +264,7 @@ shinyServer(function(input, output, session) {
 						stroke = TRUE, opacity = 1, color = colors$line, weight = colors$weight,
 						# highlight if hovered over
 						highlightOptions = highlightOptions(color = "white", weight = 2,
-															bringToFront = TRUE) 
-						)
+															bringToFront = TRUE))
 		
 		##TEMPORARY: print the list of countries and recommend scores as a simple table
 		# output$recs <- renderTable({

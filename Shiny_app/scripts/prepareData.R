@@ -4,7 +4,7 @@ require(geojsonio)
 
 setwd("~/Documents/Blogging/Country-Culture/Shiny_app/Travel_Quadrants")
 map_data <- geojson_read("data/countries.geojson", what = "sp")
-rawData <- readRDS("data/country_data.rds")
+rawData <- readRDS("data/country_data2.rds")
 
 #creating the dataset
 temp <- read.csv("~/Documents/Blogging/Country-Culture/Shiny_app/raw_data/country_data_all.csv", 
